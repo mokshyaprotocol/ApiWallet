@@ -5,6 +5,18 @@ a wallet (**owner**) grant a **session key** the ability to execute a narrow,
 pre-approved set of swaps on its behalf — **without ever exposing the owner's
 private key and without ever granting custody.**
 
+## Deployed (devnet)
+
+| Program                    | Address                                        |
+| -------------------------- | ---------------------------------------------- |
+| `delegated_trading`        | `HgUSLposEwz5MnUV6SFABbxVHmSZ1dkbuowWsjAe1s2E`  |
+| `mock_jupiter` (test only) | `4oVmoU4zT21MVgFdTp5N5AayCvMsXZDGE5Xq7QZQvjrN`  |
+
+> The devnet build uses the `mock-jupiter` feature because Jupiter runs only on
+> mainnet-beta. `node scripts/smoke-devnet.js` exercises the full flow against
+> these deployed programs (create session → execute a trade signed solely by the
+> session key). See `app/` for the Phantom-connected UI.
+
 ## Security model
 
 The single most important guarantee: when the program CPIs into Jupiter it calls

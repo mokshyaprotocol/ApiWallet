@@ -7,7 +7,7 @@ private key and without ever granting custody.**
 
 ## Live demo & deployment
 
-- **Live app (Vercel):** https://app-obfkhdn6n-ajays-projects-16370043.vercel.app
+- **Live app (Vercel):** https://app-sand-delta-31.vercel.app/
   — connect Phantom (set to **Devnet**), approve once, then trade with no popups.
 - **Frontend source:** [`app/`](./app)
 

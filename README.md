@@ -5,7 +5,13 @@ a wallet (**owner**) grant a **session key** the ability to execute a narrow,
 pre-approved set of swaps on its behalf — **without ever exposing the owner's
 private key and without ever granting custody.**
 
-## Deployed (devnet)
+## Live demo & deployment
+
+- **Live app (Vercel):** https://app-obfkhdn6n-ajays-projects-16370043.vercel.app
+  — connect Phantom (set to **Devnet**), approve once, then trade with no popups.
+- **Frontend source:** [`app/`](./app)
+
+### Deployed programs (devnet)
 
 | Program                    | Address                                        |
 | -------------------------- | ---------------------------------------------- |

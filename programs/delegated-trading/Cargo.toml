@@ -1,0 +1,27 @@
+[package]
+name = "delegated-trading"
+version = "0.1.0"
+description = "Secure delegated trading session protocol for Solana"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "delegated_trading"
+
+[features]
+default = []
+# Retarget the verified aggregator id at the bundled mock program so the CPI
+# path is testable on a local validator. NEVER enable in production builds.
+mock-jupiter = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.29.0"
+# Pin to the version matching the installed SBF toolchain; the resolver would
+# otherwise pull 1.18.x whose transitive deps require a newer Rust edition.
+solana-program = "=1.17.34"

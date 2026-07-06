@@ -1,0 +1,25 @@
+[package]
+name = "mock-jupiter"
+version = "0.1.0"
+description = "Test-only mock of the Jupiter aggregator for CPI path coverage"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mock_jupiter"
+
+[features]
+default = []
+# No-op here; present so `anchor build -- --features mock-jupiter` (which passes
+# the flag to every workspace program) does not error on an unknown feature.
+mock-jupiter = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.29.0"
+solana-program = "=1.17.34"

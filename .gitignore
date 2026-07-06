@@ -1,0 +1,34 @@
+# ---- Secrets / keypairs (NEVER commit to a public repo) ----
+# Program & wallet keypairs are private keys. Regenerate locally and run
+# `anchor keys sync` after cloning.
+*.pem
+*-keypair.json
+**/keypair.json
+mock-keys/
+id.json
+wallet.json
+.env
+.env.*
+
+# ---- Rust / Anchor build output ----
+.anchor/
+target/
+**/*.rs.bk
+Cargo.lock
+
+# ---- Node / TypeScript ----
+node_modules/
+dist/
+.yarn/
+yarn-error.log
+npm-debug.log*
+
+# ---- Editor / OS ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log
+
+# ---- Test ledger ----
+test-ledger/

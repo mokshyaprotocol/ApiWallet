@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "validate": "tsx src/sim/validateRaydium.ts"
   },
   "dependencies": {
     "@solana/web3.js": "^1.95.0"

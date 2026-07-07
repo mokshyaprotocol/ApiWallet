@@ -65,6 +65,26 @@ split, multi-hop, leg packing, venue data encoders). A live SOL→USDC quote
 against Raydium's mainnet pools returns a correct price with computed slippage
 and price impact.
 
+## Mainnet validation harness
+
+`src/sim/` builds a real swap plan, simulates it against mainnet with
+`sigVerify:false` + `replaceRecentBlockhash:true` (so it needs **no funds and no
+signing** — it "spends" from a real holder's account in simulation only), reads
+the destination balance delta, and compares it to the router's predicted output.
+This validates **both** the venue account layout (a wrong layout errors) and the
+swap math (predicted vs actual).
+
+```bash
+# Needs an RPC that allows getTokenLargestAccounts + simulateTransaction
+# account overrides (Helius/QuickNode/Triton etc. — free public nodes gate these).
+RPC_URL="https://your-rpc" npm run validate
+```
+
+Prints predicted vs simulated output and the % gap (a small gap is expected from
+cached-vs-live reserves; a large gap or a sim error flags a bug). The harness is
+venue-generic; extending it to CLMM/DLMM needs their state-fetching adapters +
+the Raydium CLMM instruction builder (next work).
+
 ## Trust model
 
 The route-finder is untrusted by design. If it returns a bad or malicious plan,

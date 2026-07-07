@@ -1,0 +1,21 @@
+{
+  "name": "@apiwallet/route-finder",
+  "version": "0.1.0",
+  "description": "Off-chain route-finder for the ApiWallet DEX aggregator — quotes and builds execution plans (legs) for the on-chain aggregator_router",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}

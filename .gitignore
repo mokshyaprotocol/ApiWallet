@@ -14,7 +14,8 @@ wallet.json
 .anchor/
 target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock IS committed — pinned to build reproducibly on the Solana 1.17
+# toolchain (see .github/workflows/ci.yml).
 
 # ---- Node / TypeScript ----
 node_modules/

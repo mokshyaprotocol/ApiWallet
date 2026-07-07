@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Fast, toolchain-free: the off-chain route-finder unit tests.
+  route-finder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install & test route-finder
+        working-directory: route-finder
+        run: |
+          npm ci
+          npm test
+
+  # Build the SBF programs and run the full-chain bankrun tests
+  # (our api-wallet swapping through our aggregator router).
+  bankrun:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Host toolchain pinned to 1.74.1 so `cargo metadata` keeps the committed
+      # v3 Cargo.lock (the Solana 1.17 SBF cargo can't read v4).
+      - uses: dtolnay/rust-toolchain@1.74.1
+
+      - name: Install Solana 1.17.34 (provides cargo-build-sbf)
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v1.17.34/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Cache Cargo registry & platform-tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cache/solana
+          key: sbf-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build SBF programs
+        run: |
+          # api-wallet: production build (real router id)
+          cargo build-sbf --manifest-path programs/delegated-trading/Cargo.toml
+          # router: localnet-mock so a token Transfer stands in for a DEX swap
+          cargo build-sbf --manifest-path programs/aggregator-router/Cargo.toml --features localnet-mock
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install node deps
+        run: npm ci
+
+      - name: Run bankrun tests (router swap + full chain)
+        run: npm run test:bankrun

@@ -14,10 +14,12 @@
   },
   "devDependencies": {
     "@meteora-ag/dlmm": "^1.9.11",
+    "@pump-fun/pump-sdk": "^1.36.0",
     "@types/bn.js": "^5.1.0",
     "@types/chai": "^4.3.0",
     "@types/mocha": "^10.0.0",
     "bn.js": "^5.2.4",
+    "bs58": "^6.0.0",
     "chai": "^4.3.4",
     "mocha": "^10.0.0",
     "prettier": "^3.0.0",

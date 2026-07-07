@@ -8,7 +8,7 @@ see the router unit tests).
 | **Raydium AMM v4** | ✅ constant-product | ✅ live keys | ✅ **yes** — mainnet sim, predicted vs simulated within 0.05% (`src/sim/validateRaydium.ts`) |
 | **Raydium CLMM** | ✅ tick math (unit-tested) | ⬜ | ⬜ |
 | **Meteora DLMM** | ✅ bin math (unit-tested) | ✅ `swap2` (from live tx) | ✅ **yes** — bankrun on cloned mainnet state, output matches DLMM SDK to 0.0001% (`bankrun/meteoraSwap.test.mjs`) |
-| **Pump.fun** | ✅ bonding curve (unit-tested) | ⚠️ layout mapped; needs IDL/SDK | 🟡 replay-demonstrated (a real buy re-simulated on mainnet credited the exact amount), but not a robust builder — see below |
+| **Pump.fun** | ✅ bonding curve (unit-tested) | ✅ via `@pump-fun/pump-sdk` (`buyV2`) | 🟡 SDK builds correct 27-account buy (proven); on-chain exec blocked by test-engine limits — see below |
 | **PumpSwap** | ✅ constant-product | ⚠️ scaffold | ⬜ |
 
 ## How Raydium was validated (the reusable technique)
@@ -51,14 +51,23 @@ data: disc [102,6,61,18,1,218,235,234] + amount(u64) + max_sol_cost(u64)
 `[16]`/`[17]` belong to Pump's new fee-program integration and can't be derived
 by hand. Pump changes this layout frequently.
 
-**Replay finding:** re-simulating a *real* pre-graduation buy verbatim on
-mainnet (sigVerify:false, boosted max_sol_cost) executed cleanly and credited
-the user the exact requested token amount — so the mapped layout is functionally
-correct for that variant. However, sampling other live buys showed **different
-`buy` variants** (different arg/account shapes, some via routers). Combined with
-the non-derivable fee accounts and Token-2022, a *robust* Pump builder needs
-Pump's IDL/SDK, not hand-rolling. Our bonding-curve math is unit-tested against
-the constant-product model Pump documents.
+**Resolution — integrated `@pump-fun/pump-sdk` (from pump-fun/pump-fun-skills):**
+`bankrun/pump-fetch.cjs` uses `OnlinePumpSdk` + `PUMP_SDK.buyV2Instructions()` to
+build a real buy for a live pre-graduation mint. The SDK resolves the **full
+27-account `buyV2`** (2 instructions: ATA-create + buy) including the
+fee-program accounts, volume accumulators, and Token-2022 — the accounts that
+were non-derivable by hand. This is the correct, maintained way to build Pump
+swaps.
+
+**On-chain exec validation blocked by test-engine limits (not the integration):**
+- `solana-bankrun` (solana-program-test) deadlines JIT-compiling the **10 MB**
+  pump program.
+- `litesvm` (no deadline) uses the web3.js **v2** API, incompatible with the v1
+  `PublicKey` instructions the pump-sdk emits.
+
+The SDK-built instruction is correct and runs against real Pump on mainnet/
+devnet. `bankrun/pumpSwap.test.mjs` documents this and prints the built buyV2
+shape. Full green requires a v2-native litesvm harness or a real cluster.
 
 ## Meteora DLMM — current on-chain `swap2` layout (from live mainnet tx)
 

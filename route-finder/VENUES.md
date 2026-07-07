@@ -5,10 +5,10 @@ see the router unit tests).
 
 | Venue | Quote math | Instruction builder | Mainnet swap validated |
 | --- | --- | --- | --- |
-| **Raydium AMM v4** | ✅ constant-product | ✅ live keys | ✅ **yes** — predicted vs simulated within 0.05% (`src/sim/validateRaydium.ts`) |
+| **Raydium AMM v4** | ✅ constant-product | ✅ live keys | ✅ **yes** — mainnet sim, predicted vs simulated within 0.05% (`src/sim/validateRaydium.ts`) |
 | **Raydium CLMM** | ✅ tick math (unit-tested) | ⬜ | ⬜ |
-| **Meteora DLMM** | ✅ bin math (unit-tested) | ⚠️ layout corrected to `swap2` from live tx | ⬜ needs SDK for state decode + bin arrays |
-| **Pump.fun** | ✅ bonding curve | ⚠️ layout mapped, 2 accts blocked | ⬜ needs IDL/SDK |
+| **Meteora DLMM** | ✅ bin math (unit-tested) | ✅ `swap2` (from live tx) | ✅ **yes** — bankrun on cloned mainnet state, output matches DLMM SDK to 0.0001% (`bankrun/meteoraSwap.test.mjs`) |
+| **Pump.fun** | ✅ bonding curve (unit-tested) | ⚠️ layout mapped; needs IDL/SDK | 🟡 replay-demonstrated (a real buy re-simulated on mainnet credited the exact amount), but not a robust builder — see below |
 | **PumpSwap** | ✅ constant-product | ⚠️ scaffold | ⬜ |
 
 ## How Raydium was validated (the reusable technique)
@@ -50,6 +50,15 @@ data: disc [102,6,61,18,1,218,235,234] + amount(u64) + max_sol_cost(u64)
 
 `[16]`/`[17]` belong to Pump's new fee-program integration and can't be derived
 by hand. Pump changes this layout frequently.
+
+**Replay finding:** re-simulating a *real* pre-graduation buy verbatim on
+mainnet (sigVerify:false, boosted max_sol_cost) executed cleanly and credited
+the user the exact requested token amount — so the mapped layout is functionally
+correct for that variant. However, sampling other live buys showed **different
+`buy` variants** (different arg/account shapes, some via routers). Combined with
+the non-derivable fee accounts and Token-2022, a *robust* Pump builder needs
+Pump's IDL/SDK, not hand-rolling. Our bonding-curve math is unit-tested against
+the constant-product model Pump documents.
 
 ## Meteora DLMM — current on-chain `swap2` layout (from live mainnet tx)
 

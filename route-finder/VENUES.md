@@ -7,7 +7,7 @@ see the router unit tests).
 | --- | --- | --- | --- |
 | **Raydium AMM v4** | ✅ constant-product | ✅ live keys | ✅ **yes** — predicted vs simulated within 0.05% (`src/sim/validateRaydium.ts`) |
 | **Raydium CLMM** | ✅ tick math (unit-tested) | ⬜ | ⬜ |
-| **Meteora DLMM** | ✅ bin math (unit-tested) | ⚠️ scaffold | ⬜ needs SDK-built accounts (bin arrays) |
+| **Meteora DLMM** | ✅ bin math (unit-tested) | ⚠️ layout corrected to `swap2` from live tx | ⬜ needs SDK for state decode + bin arrays |
 | **Pump.fun** | ✅ bonding curve | ⚠️ layout mapped, 2 accts blocked | ⬜ needs IDL/SDK |
 | **PumpSwap** | ✅ constant-product | ⚠️ scaffold | ⬜ |
 
@@ -50,6 +50,37 @@ data: disc [102,6,61,18,1,218,235,234] + amount(u64) + max_sol_cost(u64)
 
 `[16]`/`[17]` belong to Pump's new fee-program integration and can't be derived
 by hand. Pump changes this layout frequently.
+
+## Meteora DLMM — current on-chain `swap2` layout (from live mainnet tx)
+
+The current swap is **`swap2`**, not `swap` (deprecated). 17 fixed accounts +
+variable bin arrays. Mapped from a real tx:
+
+```
+disc = sha256("global:swap2")[:8] = [65,75,63,76,235,91,91,136]
+[0]  lb_pair                     (w)
+[1]  bin_array_bitmap_extension  (opt -> program id sentinel)
+[2]  reserve_x                   (w)
+[3]  reserve_y                   (w)
+[4]  user_token_in               (w)
+[5]  user_token_out              (w)
+[6]  token_x_mint
+[7]  token_y_mint
+[8]  oracle                      (w)
+[9]  host_fee_in                 (opt -> program id sentinel)
+[10] user                        signer
+[11] token_x_program             (classic or Token-2022)
+[12] token_y_program
+[13] memo_program                MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr
+[14] event_authority
+[15] program
+[16+] bin_arrays                 (from the DLMM SDK; size-dependent)
+data = disc + amount_in(u64) + min_amount_out(u64) + RemainingAccountsInfo(empty vec)
+```
+
+`src/venues/meteoraDlmm.ts` now encodes this exact layout. The remaining work to
+sim-validate: decode the LbPair state (activeId/binStep/reserves/oracle) and
+select the bin arrays for the swap — both provided by `@meteora-ag/dlmm`.
 
 ## Recommended completion path: use official SDKs for instruction-building
 

@@ -42,6 +42,14 @@ impl Venue {
     /// The program id this venue CPIs into.
     pub fn program_id(&self) -> Result<Pubkey> {
         Ok(match self {
+            // Under `localnet-mock` (tests only) the first venue slot is remapped
+            // to the SPL Token program, so a "swap leg" is a real token Transfer
+            // — this lets the router's execution + slippage path be exercised in
+            // an in-process SVM without any live DEX. Production builds never
+            // enable it and CPI the real Raydium AMM.
+            #[cfg(feature = "localnet-mock")]
+            Venue::RaydiumAmmV4 => TOKEN_PROGRAM,
+            #[cfg(not(feature = "localnet-mock"))]
             Venue::RaydiumAmmV4 => RAYDIUM_AMM_V4,
             Venue::RaydiumClmm => RAYDIUM_CLMM,
             Venue::RaydiumCpmm => RAYDIUM_CPMM,

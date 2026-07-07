@@ -14,6 +14,9 @@ default = []
 # No-op; present so `anchor build -- --features mock-router` (which passes the
 # flag to every workspace program) does not error on an unknown feature.
 mock-router = []
+# Test-only: remap the first venue slot to the SPL Token program so route() can
+# be exercised against a real token Transfer in an in-process SVM (see bankrun/).
+localnet-mock = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

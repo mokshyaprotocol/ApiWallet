@@ -6,7 +6,8 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "test": "anchor test -- --features mock-jupiter"
+    "test": "anchor test -- --features mock-router",
+    "test:bankrun": "SBF_OUT_DIR=$PWD/target/deploy tsx bankrun/routerSwap.test.mjs && SBF_OUT_DIR=$PWD/target/deploy tsx bankrun/fullChain.test.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0"
@@ -18,7 +19,9 @@
     "chai": "^4.3.4",
     "mocha": "^10.0.0",
     "prettier": "^3.0.0",
+    "solana-bankrun": "^0.4.0",
     "ts-mocha": "^10.0.0",
+    "tsx": "^4.16.0",
     "typescript": "^5.4.0"
   }
 }

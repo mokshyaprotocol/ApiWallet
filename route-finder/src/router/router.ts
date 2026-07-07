@@ -4,7 +4,7 @@
  * and bounded multi-hop. Exact bigint math throughout.
  */
 import { DexId, Pool, Route, RouteHop, RouteStep } from "../core/types.js";
-import { poolAmountOut, spotPrice } from "../core/amm.js";
+import { quotePool, spotPriceOf } from "../core/pricing.js";
 
 export interface RouteOptions {
   maxSplits: number;
@@ -57,11 +57,11 @@ function computeStep(
   if (pools.length === 0 || amountIn <= 0n) return null;
 
   const ranked = [...pools].sort((a, b) =>
-    poolAmountOut(b, tokenIn, amountIn) > poolAmountOut(a, tokenIn, amountIn) ? 1 : -1
+    quotePool(b, tokenIn, amountIn) > quotePool(a, tokenIn, amountIn) ? 1 : -1
   );
   const candidates = ranked.slice(0, Math.max(1, opts.maxSplits));
   const single = candidates[0];
-  const singleOut = poolAmountOut(single, tokenIn, amountIn);
+  const singleOut = quotePool(single, tokenIn, amountIn);
 
   const chunk = amountIn / BigInt(opts.splitGranularity);
   let alloc: bigint[];
@@ -77,8 +77,8 @@ function computeStep(
       let bestI = 0;
       let bestGain = -1n;
       for (let i = 0; i < candidates.length; i++) {
-        const cur = poolAmountOut(candidates[i], tokenIn, alloc[i]);
-        const next = poolAmountOut(candidates[i], tokenIn, alloc[i] + step);
+        const cur = quotePool(candidates[i], tokenIn, alloc[i]);
+        const next = quotePool(candidates[i], tokenIn, alloc[i] + step);
         const gain = next - cur;
         if (gain > bestGain) {
           bestGain = gain;
@@ -88,7 +88,7 @@ function computeStep(
       alloc[bestI] += step;
       remaining -= step;
     }
-    out = candidates.reduce((acc, p, i) => acc + poolAmountOut(p, tokenIn, alloc[i]), 0n);
+    out = candidates.reduce((acc, p, i) => acc + quotePool(p, tokenIn, alloc[i]), 0n);
     if (out <= singleOut) {
       alloc = candidates.map((p) => (p === single ? amountIn : 0n));
       out = singleOut;
@@ -103,7 +103,7 @@ function computeStep(
         tokenIn,
         tokenOut,
         amountIn: alloc[i],
-        amountOut: poolAmountOut(p, tokenIn, alloc[i]),
+        amountOut: quotePool(p, tokenIn, alloc[i]),
       });
   });
   return { tokenIn, tokenOut, amountIn, amountOut: out, hops };
@@ -111,7 +111,7 @@ function computeStep(
 
 function stepMid(step: RouteStep): number {
   const best = step.hops.reduce((a, b) => (b.amountOut > a.amountOut ? b : a));
-  return spotPrice(best.pool, step.tokenIn);
+  return spotPriceOf(best.pool, step.tokenIn);
 }
 
 function routeFromSteps(

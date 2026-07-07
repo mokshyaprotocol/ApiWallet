@@ -19,15 +19,23 @@ build legs + accounts (execution)         • slippage on real balance delta
 | Layer | Status |
 | --- | --- |
 | Constant-product + bonding-curve math (exact bigint) | ✅ tested |
+| **CLMM tick-walking math** (Uniswap-v3 style, Q64.64) | ✅ tested* |
+| **DLMM bin-walking math** (Meteora style) | ✅ tested* |
+| Kind-aware pricing dispatcher wired into the router | ✅ tested |
 | Router: single-hop, **split** (water-filling), **multi-hop** | ✅ tested |
 | Adapters: Raydium (AMM+CLMM), Pump.fun (on-chain curve decode), Mock | ✅ (Raydium verified live) |
 | Execution: `Route → RouterPlan` (legs + packed accounts) | ✅ tested |
-| Venue instruction builder: **Raydium AMM v4 swapBaseIn** | ✅ (validate on mainnet before funded use) |
-| CLMM tick math / DLMM bin math (exact) | ⬜ roadmap (currently approximated) |
-| Meteora / PumpSwap / Kamino instruction builders | ⬜ roadmap |
+| Venue builder: **Raydium AMM v4 swapBaseIn** | ✅ (fetches live keys) |
+| Venue builders: **PumpSwap, Meteora DLMM** | ✅ data encoders tested; account layouts ⚠️ unvalidated |
+| Kamino | ⛔ not a swap venue — see `venues/kamino.ts` |
 
-CLMM/DLMM pools are currently priced with constant-product math over total
-reserves — a documented approximation; exact tick/bin pricing is on the roadmap.
+*The CLMM/DLMM **math** is the exact concentrated-liquidity / bin equations and
+is unit-tested for correctness (monotonicity, parity at price 1.0, fee, price
+impact). **Bit-exact parity with each protocol's on-chain fixed-point rounding**
+(and the tick→sqrtPrice table / bin Q64.64 prices) still needs a mainnet dry-run
+before quotes are used for settlement. The PumpSwap/Meteora instruction *data*
+encoders are exact (verified anchor discriminators); their *account layouts* are
+documented-but-unvalidated and are gated behind `defaultBuilders({ includeUnvalidated: true })`.
 
 ## Usage
 
@@ -52,9 +60,10 @@ const res = await agg.quoteAndPlan(
 
 ## Verified
 
-`npm test` runs 17 unit tests (math, router, split, multi-hop, leg packing,
-data encoding). A live SOL→USDC quote against Raydium's mainnet pools returns a
-correct price with computed slippage and price impact.
+`npm test` runs 31 unit tests (constant-product / CLMM / DLMM math, router,
+split, multi-hop, leg packing, venue data encoders). A live SOL→USDC quote
+against Raydium's mainnet pools returns a correct price with computed slippage
+and price impact.
 
 ## Trust model
 

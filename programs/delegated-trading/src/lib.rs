@@ -6,8 +6,9 @@
 //! custody.
 //!
 //! ## What a session key can do
-//! * Exactly one action: [`execute_trade`], a Jupiter v6 swap that respects the
-//!   session's allowlists and volume limits.
+//! * Exactly one action: [`execute_trade`], which routes a swap through our own
+//!   `aggregator_router` (best-price execution across Raydium/Meteora/Pump),
+//!   respecting the session's allowlists and volume limits.
 //!
 //! ## What a session key can *never* do
 //! * `SystemProgram::Transfer`, SPL token transfers, closing accounts, changing
@@ -15,8 +16,8 @@
 //!
 //! These are not merely "not implemented" — they are structurally impossible:
 //! the program only ever lends the session PDA's signature to a CPI, and only
-//! to the verified Jupiter program. See [`instructions::execute_trade`] for the
-//! full argument.
+//! to the verified aggregator router. See [`instructions::execute_trade`] for
+//! the full argument.
 //!
 //! ## Lifecycle (owner-only)
 //! [`create_session`] → [`update_session`]* → [`revoke_session`].
@@ -89,7 +90,7 @@ pub mod delegated_trading {
         revoke_session::handler(ctx)
     }
 
-    /// Execute an approved Jupiter swap. Signer must be the session key.
+    /// Execute an approved swap via the aggregator router. Signer must be the session key.
     /// The only instruction the session key is authorized to call.
     pub fn execute_trade<'info>(
         ctx: Context<'_, '_, 'info, 'info, ExecuteTrade<'info>>,

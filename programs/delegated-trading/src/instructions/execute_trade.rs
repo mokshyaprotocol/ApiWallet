@@ -3,18 +3,20 @@
 //! ## Security model
 //!
 //! The single most important guarantee of this program is this: when we CPI
-//! into Jupiter we call [`invoke_signed`] lending **only** the
-//! [`TradingSession`] PDA's signature. We never sign as the owner and never
-//! sign for any other account. Therefore the swap can only move funds whose
-//! authority is the session PDA (a program-custodied vault) — it is physically
-//! impossible for a crafted route to drain the owner's main wallet, close an
-//! arbitrary account, or reassign an authority, because those actions would
-//! require a signature we do not provide.
+//! into our [`aggregator_router`](crate::constants::ROUTER_PROGRAM_ID) we call
+//! [`invoke_signed`] lending **only** the [`TradingSession`] PDA's signature.
+//! We never sign as the owner and never sign for any other account. Therefore
+//! the swap can only move funds whose authority is the session PDA (a
+//! program-custodied vault) — it is physically impossible for a crafted route
+//! to drain the owner's main wallet, close an arbitrary account, or reassign an
+//! authority, because those actions would require a signature we do not provide.
 //!
 //! On top of that hard floor we layer policy checks: the target program must be
-//! Jupiter v6 *and* allowlisted, the input/output mints must be allowlisted, the
-//! amount must respect the per-trade and rolling daily caps, and a caller-
-//! supplied nonce must match the on-chain nonce (replay protection).
+//! our aggregator router *and* allowlisted, the input/output mints must be
+//! allowlisted, the amount must respect the per-trade and rolling daily caps,
+//! and a caller-supplied nonce must match the on-chain nonce (replay
+//! protection). The router — not this program — fans the trade out across
+//! Raydium/Meteora/Pump and enforces its own aggregate slippage bound.
 
 use crate::constants::*;
 use crate::errors::TradingError;
@@ -41,11 +43,11 @@ pub struct ExecuteTrade<'info> {
     )]
     pub session: Account<'info, TradingSession>,
 
-    /// CHECK: validated by pubkey equality against `JUPITER_V6_PROGRAM_ID`
-    /// below. This is the program we CPI into; it is executable and untrusted
-    /// beyond that identity check.
-    pub jupiter_program: UncheckedAccount<'info>,
-    // All accounts the Jupiter route requires are passed as `remaining_accounts`.
+    /// CHECK: validated by pubkey equality against `ROUTER_PROGRAM_ID` below.
+    /// This is the aggregator router we CPI into; untrusted beyond that identity
+    /// check (the router itself enforces the venue allowlist and slippage).
+    pub router_program: UncheckedAccount<'info>,
+    // All accounts the router's `route` needs are passed as `remaining_accounts`.
 }
 
 /// Emit a rejection event, then return the error. Keeps the failure observable
@@ -132,9 +134,9 @@ pub fn handler<'info>(
             ));
         }
 
-        // 5. CPI target must be Jupiter v6 *and* on the owner's allowlist.
-        let target_program = ctx.accounts.jupiter_program.key();
-        if target_program != JUPITER_V6_PROGRAM_ID {
+        // 5. CPI target must be our aggregator router *and* on the allowlist.
+        let target_program = ctx.accounts.router_program.key();
+        if target_program != ROUTER_PROGRAM_ID {
             return Err(reject(
                 &session_key,
                 &signer_key,
@@ -202,7 +204,7 @@ pub fn handler<'info>(
         .collect();
 
     let ix = Instruction {
-        program_id: ctx.accounts.jupiter_program.key(),
+        program_id: ctx.accounts.router_program.key(),
         accounts: account_metas,
         data: route_data,
     };
@@ -224,7 +226,7 @@ pub fn handler<'info>(
     emit!(TradeExecuted {
         session: session_key,
         session_pubkey: signer_key,
-        program_id: ctx.accounts.jupiter_program.key(),
+        program_id: ctx.accounts.router_program.key(),
         input_mint,
         output_mint,
         amount_in,

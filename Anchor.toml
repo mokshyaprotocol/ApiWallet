@@ -6,7 +6,7 @@ skip-lint = false
 
 [programs.localnet]
 delegated_trading = "HgUSLposEwz5MnUV6SFABbxVHmSZ1dkbuowWsjAe1s2E"
-mock_jupiter = "4oVmoU4zT21MVgFdTp5N5AayCvMsXZDGE5Xq7QZQvjrN"
+mock_router = "4oVmoU4zT21MVgFdTp5N5AayCvMsXZDGE5Xq7QZQvjrN"
 aggregator_router = "7c8LDstCZnVxtcKLBdMD6YFmmNbVUTaQnZNv9Txmh8t6"
 
 [programs.devnet]
@@ -22,11 +22,11 @@ wallet = "~/.config/solana/id.json"
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
-# Tests run against the bundled mock aggregator (see programs/mock-jupiter and
-# the `mock-jupiter` feature). Build with that feature enabled:
+# Tests run against the bundled mock router (see programs/mock-router and
+# the `mock-router` feature). Build with that feature enabled:
 #
-#   anchor build -- --features mock-jupiter
-#   anchor test  -- --features mock-jupiter
+#   anchor build -- --features mock-router
+#   anchor test  -- --features mock-router
 #
-# The mock program's keypair lives at mock-keys/mock_jupiter-keypair.json;
+# The mock program's keypair lives at mock-keys/mock_router-keypair.json;
 # `anchor build` writes the delegated_trading keypair to target/deploy/.

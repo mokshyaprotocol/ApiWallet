@@ -31,7 +31,7 @@ pub struct TradingSession {
     pub daily_volume_used: u64,
     /// Start of the current daily window; used to roll `daily_volume_used`.
     pub daily_window_start: i64,
-    /// Programs the session key may CPI into (subset check + Jupiter floor).
+    /// Programs the session key may CPI into (subset check + router floor).
     pub allowed_programs: Vec<Pubkey>,
     /// Permitted input mints.
     pub allowed_input_tokens: Vec<Pubkey>,
@@ -140,9 +140,10 @@ pub fn validate_config(
     validate_allowlist(allowed_input_tokens, MAX_ALLOWED_INPUT_TOKENS)?;
     validate_allowlist(allowed_output_tokens, MAX_ALLOWED_OUTPUT_TOKENS)?;
 
-    // A session must at minimum permit Jupiter, or it can never trade.
+    // A session must at minimum permit our aggregator router, or it can never
+    // trade (it is the only program `execute_trade` will CPI into).
     require!(
-        allowed_programs.contains(&JUPITER_V6_PROGRAM_ID),
+        allowed_programs.contains(&ROUTER_PROGRAM_ID),
         TradingError::ProgramNotAllowed
     );
 

@@ -1,19 +1,19 @@
 [package]
-name = "mock-jupiter"
+name = "mock-router"
 version = "0.1.0"
-description = "Test-only mock of the Jupiter aggregator for CPI path coverage"
+description = "Test-only mock CPI target (aggregator router stand-in)"
 edition = "2021"
 license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "mock_jupiter"
+name = "mock_router"
 
 [features]
 default = []
-# No-op here; present so `anchor build -- --features mock-jupiter` (which passes
+# No-op here; present so `anchor build -- --features mock-router` (which passes
 # the flag to every workspace program) does not error on an unknown feature.
-mock-jupiter = []
+mock-router = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

@@ -13,7 +13,7 @@ name = "delegated_trading"
 default = []
 # Retarget the verified aggregator id at the bundled mock program so the CPI
 # path is testable on a local validator. NEVER enable in production builds.
-mock-jupiter = []
+mock-router = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

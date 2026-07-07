@@ -11,6 +11,9 @@ name = "aggregator_router"
 
 [features]
 default = []
+# No-op; present so `anchor build -- --features mock-router` (which passes the
+# flag to every workspace program) does not error on an unknown feature.
+mock-router = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []

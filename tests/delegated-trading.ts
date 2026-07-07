@@ -3,10 +3,10 @@
  *
  * Build & run with the mock aggregator so the CPI path is exercised locally:
  *
- *   anchor test -- --features mock-jupiter
+ *   anchor test -- --features mock-router
  *
  * Under that feature the program's verified aggregator id points at the bundled
- * `mock_jupiter` program (see programs/mock-jupiter). Every check up to and
+ * `mock_router` program (see programs/mock-router). Every check up to and
  * including the `invoke_signed` CPI is real.
  */
 import * as anchor from "@coral-xyz/anchor";
@@ -19,7 +19,7 @@ import {
 } from "@solana/web3.js";
 import { assert, expect } from "chai";
 import { DelegatedTrading } from "../target/types/delegated_trading";
-import { MockJupiter } from "../target/types/mock_jupiter";
+import { MockRouter } from "../target/types/mock_router";
 
 const SESSION_SEED = Buffer.from("trading_session");
 
@@ -29,8 +29,8 @@ describe("delegated-trading", () => {
 
   const program = anchor.workspace
     .DelegatedTrading as Program<DelegatedTrading>;
-  const mockJupiter = anchor.workspace.MockJupiter as Program<MockJupiter>;
-  const JUPITER = mockJupiter.programId;
+  const mockRouter = anchor.workspace.MockRouter as Program<MockRouter>;
+  const ROUTER = mockRouter.programId;
 
   const connection = provider.connection;
 
@@ -76,7 +76,7 @@ describe("delegated-trading", () => {
         new BN(opts.expiresAt ?? now() + 3600),
         opts.maxTrade ?? new BN(1_000),
         opts.dailyLimit ?? new BN(2_000),
-        opts.programs ?? [JUPITER],
+        opts.programs ?? [ROUTER],
         opts.inputs ?? [inputMint],
         opts.outputs ?? [outputMint]
       )
@@ -92,7 +92,7 @@ describe("delegated-trading", () => {
 
   /** Encode the mock aggregator's `swap` instruction data. */
   function routeData(amountIn: BN, minOut: BN): Buffer {
-    return mockJupiter.coder.instruction.encode("swap", {
+    return mockRouter.coder.instruction.encode("swap", {
       amountIn,
       minAmountOut: minOut,
     });
@@ -125,7 +125,7 @@ describe("delegated-trading", () => {
       .accounts({
         sessionSigner: sessionKey,
         session: pda,
-        jupiterProgram: params.program ?? JUPITER,
+        routerProgram: params.program ?? ROUTER,
       })
       .remainingAccounts([
         { pubkey: pda, isSigner: false, isWritable: false },
@@ -157,7 +157,7 @@ describe("delegated-trading", () => {
     assert.equal(s.nonce.toNumber(), 0);
     assert.equal(s.maxTradeAmount.toNumber(), 1_000);
     assert.equal(s.dailyTradeLimit.toNumber(), 2_000);
-    assert.ok(s.allowedPrograms[0].equals(JUPITER));
+    assert.ok(s.allowedPrograms[0].equals(ROUTER));
   });
 
   it("rejects create with expiry in the past", async () => {
@@ -170,7 +170,7 @@ describe("delegated-trading", () => {
     );
   });
 
-  it("rejects create when Jupiter not in the program allowlist", async () => {
+  it("rejects create when the router is not in the program allowlist", async () => {
     const owner = Keypair.generate();
     await fund(owner.publicKey);
     const sessionKey = Keypair.generate().publicKey;
@@ -367,7 +367,7 @@ describe("delegated-trading", () => {
     );
   });
 
-  it("successful Jupiter (mock) trade updates nonce and volume", async () => {
+  it("successful routed (mock) trade updates nonce and volume", async () => {
     const owner = Keypair.generate();
     await fund(owner.publicKey);
     const sessionKp = Keypair.generate();

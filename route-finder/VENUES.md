@@ -8,7 +8,7 @@ see the router unit tests).
 | **Raydium AMM v4** | ✅ constant-product | ✅ live keys | ✅ **yes** — mainnet sim, predicted vs simulated within 0.05% (`src/sim/validateRaydium.ts`) |
 | **Raydium CLMM** | ✅ tick math (unit-tested) | ⬜ | ⬜ |
 | **Meteora DLMM** | ✅ bin math (unit-tested) | ✅ `swap2` (from live tx) | ✅ **yes** — bankrun on cloned mainnet state, output matches DLMM SDK to 0.0001% (`bankrun/meteoraSwap.test.mjs`) |
-| **Pump.fun** | ✅ bonding curve (unit-tested) | ✅ via `@pump-fun/pump-sdk` (`buyV2`) | 🟡 SDK builds correct 27-account buy (proven); on-chain exec blocked by test-engine limits — see below |
+| **Pump.fun** | ✅ bonding curve (unit-tested) | ✅ via `@pump-fun/pump-sdk` (`buyV2`) | ✅ **yes** — litesvm on cloned mainnet state; user received exactly the SDK-quoted amount (0.0000%) (`bankrun/pumpSwap.test.mjs`) |
 | **PumpSwap** | ✅ constant-product | ⚠️ scaffold | ⬜ |
 
 ## How Raydium was validated (the reusable technique)
@@ -59,15 +59,12 @@ fee-program accounts, volume accumulators, and Token-2022 — the accounts that
 were non-derivable by hand. This is the correct, maintained way to build Pump
 swaps.
 
-**On-chain exec validation blocked by test-engine limits (not the integration):**
-- `solana-bankrun` (solana-program-test) deadlines JIT-compiling the **10 MB**
-  pump program.
-- `litesvm` (no deadline) uses the web3.js **v2** API, incompatible with the v1
-  `PublicKey` instructions the pump-sdk emits.
-
-The SDK-built instruction is correct and runs against real Pump on mainnet/
-devnet. `bankrun/pumpSwap.test.mjs` documents this and prints the built buyV2
-shape. Full green requires a v2-native litesvm harness or a real cluster.
+**On-chain exec validated with litesvm.** `solana-bankrun` (solana-program-test)
+deadlines JIT-compiling the 10 MB pump program, so `bankrun/pumpSwap.test.mjs`
+uses **litesvm 0.2** (web3.js v1 API, no BanksServer deadline) to load the
+programs + cloned accounts, inject a funded user, and run the SDK's buyV2. The
+user receives exactly the SDK-quoted amount (**0.0000%**) — proving the SDK-built
+27-account instruction executes correctly on real Pump program bytecode + state.
 
 ## Meteora DLMM — current on-chain `swap2` layout (from live mainnet tx)
 

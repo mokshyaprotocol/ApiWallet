@@ -35,17 +35,18 @@ RPC_URL="https://your-rpc" node bankrun/meteora-fetch.cjs
 SBF_OUT_DIR=$PWD/bankrun/fixtures npx tsx bankrun/meteoraSwap.test.mjs
 ```
 
-- **`pumpSwap.test.mjs`** — Pump.fun `buyV2` via `@pump-fun/pump-sdk`.
-  `pump-fetch.cjs` builds a real buy for a live pre-graduation mint (the SDK
-  resolves all 27 accounts — fee program, volume accumulators, Token-2022),
-  dumps the pump + fee programs, and clones the referenced accounts. The buy is
-  correctly constructed; on-chain execution here is blocked by test-engine
-  limits (bankrun deadlines on the 10 MB program; litesvm is web3.js-v2-only) —
-  see `route-finder/VENUES.md`.
+- **`pumpSwap.test.mjs`** — Pump.fun `buyV2` via `@pump-fun/pump-sdk`, validated
+  on cloned mainnet state. `pump-fetch.cjs` builds a real buy for a live
+  pre-graduation mint (the SDK resolves all 27 accounts — fee program, volume
+  accumulators, Token-2022), dumps the pump + fee programs, and clones the
+  referenced accounts. The test loads them into **litesvm** (v1 API, no
+  BanksServer deadline — bankrun can't JIT the 10 MB pump program in time),
+  injects a funded user, runs the buy, and asserts the user receives the
+  SDK-quoted amount. Confirmed **0.0000%**.
 
 ```bash
 RPC_URL="https://your-rpc" node bankrun/pump-fetch.cjs
-SBF_OUT_DIR=$PWD/bankrun/fixtures npx tsx bankrun/pumpSwap.test.mjs
+npx tsx bankrun/pumpSwap.test.mjs
 ```
 
 Fixtures (`bankrun/fixtures/`, incl. large program `.so` files) are gitignored —

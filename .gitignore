@@ -33,3 +33,6 @@ npm-debug.log*
 
 # ---- Test ledger ----
 test-ledger/
+
+# bankrun fixtures (regenerate via *-fetch scripts; large program .so)
+bankrun/fixtures/

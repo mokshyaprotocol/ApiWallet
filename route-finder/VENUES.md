@@ -11,6 +11,27 @@ see the router unit tests).
 | **Pump.fun** | ✅ bonding curve (unit-tested) | ✅ via `@pump-fun/pump-sdk` (`buyV2`) | ✅ **yes** — litesvm on cloned mainnet state; user received exactly the SDK-quoted amount (0.0000%) (`bankrun/pumpSwap.test.mjs`) |
 | **PumpSwap** | ✅ constant-product | ⚠️ scaffold | ⬜ |
 
+## Multi-venue swap in ONE (versioned) transaction
+
+Yes — `aggregator_router.route()` executes N legs across distinct venues
+atomically in a single transaction, with the aggregate `min_amount_out`
+enforced across all legs. Validated on-chain in litesvm
+(`bankrun/threeVenue.test.mjs`): a **3-leg route (three distinct venue
+selectors) in one v0 `VersionedTransaction`** credits the destination the sum of
+all legs, and an unmet aggregate min triggers an atomic revert.
+
+**Account limits & Address Lookup Tables:** three *real* venue legs run ~50-70
+accounts, over the ~35 a legacy tx holds. `route-finder`'s `versionedTx.ts`
+compiles `route()` into a **v0 message against Address Lookup Tables**,
+compressing each key to a 1-byte index so the swap fits one tx (unit-tested:
+`test/versionedTx.test.ts`). `createLookupTableForPlan()` builds the LUT.
+
+**Constraint:** a Pump.fun *bonding-curve* token can't be on Raydium/Meteora
+(graduation is mutually exclusive). A *graduated* token can be on PumpSwap +
+Raydium + Meteora. To wire specific real 3-venue tokens end-to-end, the
+remaining builders are Raydium **CLMM** and **PumpSwap AMM** (Meteora DLMM,
+Raydium AMM v4, and Pump buyV2 are already validated).
+
 ## How Raydium was validated (the reusable technique)
 
 `simulateTransaction({ sigVerify:false, replaceRecentBlockhash:true })` runs the

@@ -18,9 +18,20 @@ They inject funded SPL token accounts directly and drive real CPIs.
   through the router to the venue, the nonce advances, and a replayed nonce is
   rejected. (3/3)
 
+- **`threeVenue.test.mjs`** — proves **three venues in one versioned (v0)
+  transaction**: `route()` runs 3 legs with distinct venue selectors atomically
+  and enforces the aggregate slippage bound (atomic revert if unmet). Needs the
+  `localnet-mock` build (which maps the first 3 venue slots to the SPL Token
+  program, so each leg is a real token Transfer).
+
+```bash
+anchor build -p aggregator_router -- --features localnet-mock
+npx tsx bankrun/threeVenue.test.mjs
+```
+
 To let a token Transfer stand in for a DEX swap in-process, `aggregator_router`
-is built with the **`localnet-mock`** feature, which remaps the first venue slot
-to the SPL Token program. Production builds never enable it.
+is built with the **`localnet-mock`** feature, which maps the first three venue
+slots to the SPL Token program. Production builds never enable it.
 
 - **`meteoraSwap.test.mjs`** — validates the real Meteora DLMM **`swap2`**
   instruction against **cloned mainnet state**: `meteora-fetch.cjs` dumps the

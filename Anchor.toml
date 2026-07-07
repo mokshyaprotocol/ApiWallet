@@ -7,6 +7,7 @@ skip-lint = false
 [programs.localnet]
 delegated_trading = "HgUSLposEwz5MnUV6SFABbxVHmSZ1dkbuowWsjAe1s2E"
 mock_jupiter = "4oVmoU4zT21MVgFdTp5N5AayCvMsXZDGE5Xq7QZQvjrN"
+aggregator_router = "7c8LDstCZnVxtcKLBdMD6YFmmNbVUTaQnZNv9Txmh8t6"
 
 [programs.devnet]
 delegated_trading = "HgUSLposEwz5MnUV6SFABbxVHmSZ1dkbuowWsjAe1s2E"

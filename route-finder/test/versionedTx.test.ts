@@ -26,13 +26,14 @@ async function makePlan() {
 }
 
 describe("route() instruction encoding", () => {
-  it("encodes disc + amountIn + minOut + legs vec", async () => {
+  it("encodes disc + amountIn + minOut + integratorFeeBps + legs vec", async () => {
     const plan = await makePlan();
-    const data = encodeRouteData(plan);
+    const data = encodeRouteData(plan, 25);
     expect(Array.from(data.subarray(0, 8))).toEqual(Array.from(ROUTE_DISCRIMINATOR));
     expect(data.readBigUInt64LE(8)).toBe(plan.amountIn);
     expect(data.readBigUInt64LE(16)).toBe(plan.minAmountOut);
-    expect(data.readUInt32LE(24)).toBe(plan.legs.length); // 1 leg
+    expect(data.readUInt16LE(24)).toBe(25); // integrator_fee_bps
+    expect(data.readUInt32LE(26)).toBe(plan.legs.length); // 1 leg
   });
 });
 
@@ -43,6 +44,9 @@ describe("versioned (v0) transaction + Address Lookup Table", () => {
       routerProgramId: new PublicKey("7c8LDstCZnVxtcKLBdMD6YFmmNbVUTaQnZNv9Txmh8t6"),
       authority: Keypair.generate().publicKey,
       outputTokenAccount: Keypair.generate().publicKey,
+      tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+      protocolFeeAccount: Keypair.generate().publicKey,
+      integratorFeeAccount: Keypair.generate().publicKey,
     };
     const addrs = lookupAddressesForPlan(plan, accounts);
     const lut = makeLookupTableAccount(Keypair.generate().publicKey, addrs);

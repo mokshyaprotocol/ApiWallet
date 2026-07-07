@@ -83,6 +83,28 @@ pub const PUMP_SWAP: Pubkey = pk("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
 /// share the same `amount` layout at offset 64, which is all the router reads.
 pub const TOKEN_PROGRAM: Pubkey = pk("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
+// ---- Fee model (Jupiter/DFlow-style integrator fee + our protocol fee) ------
+
+/// Max integrator fee, in basis points. Mirrors Jupiter's historical `u8`
+/// `platformFeeBps` ceiling (255 bps = 2.55%). Third parties integrating the
+/// router set any value up to this, sent to their own fee account.
+pub const MAX_INTEGRATOR_FEE_BPS: u16 = 255;
+
+/// Our protocol fee, in basis points (0.20%, matching Jupiter's docs example).
+/// Always skimmed to a `protocol_fee_account` owned by [`PROTOCOL_FEE_RECIPIENT`].
+/// Set to 0 to disable. This is the "fee for us".
+pub const PROTOCOL_FEE_BPS: u16 = 20;
+
+/// Treasury that must own the protocol fee account — so an integrator can't
+/// redirect our cut. (Owner of the fee token account, per-mint ATA.)
+/// Ec5kwqhc1ptv4r3EptfZypvB3dCtQwdLt6cC4EKrGBFd
+pub const PROTOCOL_FEE_RECIPIENT: Pubkey = Pubkey::new_from_array([
+    202, 36, 163, 76, 152, 197, 72, 164, 154, 66, 41, 24, 35, 9, 68, 243, 228, 20, 106, 218, 13,
+    235, 65, 150, 91, 21, 180, 237, 174, 143, 122, 32,
+]);
+
+pub const BPS_DENOMINATOR: u64 = 10_000;
+
 /// Compile-time base58 → Pubkey (const `pubkey!` alternative that avoids the
 /// macro's crate-path resolution issues under this toolchain).
 const fn pk(s: &str) -> Pubkey {

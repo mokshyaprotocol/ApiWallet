@@ -18,9 +18,11 @@ function u64le(n: bigint): Buffer {
   return b;
 }
 
-/** Borsh-encode route() args: amount_in, min_amount_out, Vec<SwapLeg>. */
-export function encodeRouteData(plan: RouterPlan): Buffer {
-  const head = Buffer.concat([Buffer.from(ROUTE_DISCRIMINATOR), u64le(plan.amountIn), u64le(plan.minAmountOut)]);
+/** Borsh-encode route() args: amount_in, min_amount_out, integrator_fee_bps, Vec<SwapLeg>. */
+export function encodeRouteData(plan: RouterPlan, integratorFeeBps = 0): Buffer {
+  const feeBps = Buffer.alloc(2);
+  feeBps.writeUInt16LE(integratorFeeBps);
+  const head = Buffer.concat([Buffer.from(ROUTE_DISCRIMINATOR), u64le(plan.amountIn), u64le(plan.minAmountOut), feeBps]);
   const legCount = Buffer.alloc(4);
   legCount.writeUInt32LE(plan.legs.length);
   const legs = plan.legs.map((leg) => {
@@ -37,20 +39,30 @@ export interface RouteAccounts {
   routerProgramId: PublicKey;
   authority: PublicKey; // signer (user or session PDA)
   outputTokenAccount: PublicKey; // slippage measured here
+  tokenProgram: PublicKey; // SPL Token program for fee transfers
+  protocolFeeAccount: PublicKey; // output-mint token account owned by our treasury
+  integratorFeeAccount: PublicKey; // integrator's output-mint token account
 }
 
 /** Build the route() TransactionInstruction from a plan. */
-export function buildRouteInstruction(plan: RouterPlan, a: RouteAccounts): TransactionInstruction {
+export function buildRouteInstruction(
+  plan: RouterPlan,
+  a: RouteAccounts,
+  integratorFeeBps = 0
+): TransactionInstruction {
   const keys = [
     { pubkey: a.authority, isSigner: true, isWritable: false },
     { pubkey: a.outputTokenAccount, isSigner: false, isWritable: true },
+    { pubkey: a.tokenProgram, isSigner: false, isWritable: false },
+    { pubkey: a.protocolFeeAccount, isSigner: false, isWritable: true },
+    { pubkey: a.integratorFeeAccount, isSigner: false, isWritable: true },
     ...plan.accounts.map((m) => ({
       pubkey: new PublicKey(m.pubkey),
       isSigner: m.isSigner,
       isWritable: m.isWritable,
     })),
   ];
-  return new TransactionInstruction({ programId: a.routerProgramId, keys, data: encodeRouteData(plan) });
+  return new TransactionInstruction({ programId: a.routerProgramId, keys, data: encodeRouteData(plan, integratorFeeBps) });
 }
 
 /** Unique non-signer addresses in a plan — the candidates for an Address Lookup Table. */
@@ -64,6 +76,9 @@ export function lookupAddressesForPlan(plan: RouterPlan, a: RouteAccounts): Publ
   };
   add(a.outputTokenAccount.toBase58(), false);
   add(a.routerProgramId.toBase58(), false);
+  add(a.tokenProgram.toBase58(), false);
+  add(a.protocolFeeAccount.toBase58(), false);
+  add(a.integratorFeeAccount.toBase58(), false);
   for (const m of plan.accounts) add(m.pubkey, m.isSigner);
   return out;
 }

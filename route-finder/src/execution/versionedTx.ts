@@ -24,6 +24,8 @@ export interface V0Options {
   lookupTables?: AddressLookupTableAccount[];
   /** Extra instructions to prepend (e.g. ComputeBudget). */
   preInstructions?: TransactionInstruction[];
+  /** Third-party integrator fee, basis points (0 = none). */
+  integratorFeeBps?: number;
 }
 
 /** Compile the route() call into a v0 VersionedTransaction, using any LUTs given. */
@@ -32,7 +34,7 @@ export function buildRouteV0Transaction(
   accounts: RouteAccounts,
   opts: V0Options
 ): VersionedTransaction {
-  const routeIx = buildRouteInstruction(plan, accounts);
+  const routeIx = buildRouteInstruction(plan, accounts, opts.integratorFeeBps ?? 0);
   const message = new TransactionMessage({
     payerKey: opts.payer,
     recentBlockhash: opts.recentBlockhash,

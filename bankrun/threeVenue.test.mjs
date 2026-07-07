@@ -35,9 +35,10 @@ function tokenAcct(mint, owner, amount) {
 const readAmount = (d) => Buffer.from(d).readBigUInt64LE(64);
 const transferData = (amt) => { const b = Buffer.alloc(9); b[0] = 3; b.writeBigUInt64LE(BigInt(amt), 1); return b; };
 
-// route(amount_in, min_out, [leg0(venue0), leg1(venue1), leg2(venue2)])
+// route(amount_in, min_out, integrator_fee_bps=0, [leg0(venue0), leg1(venue1), leg2(venue2)])
 function routeData(amountIn, minOut, legs) {
-  const head = Buffer.concat([ROUTE_DISC, u64(amountIn), u64(minOut)]);
+  const feeBps = Buffer.alloc(2); // integrator_fee_bps = 0
+  const head = Buffer.concat([ROUTE_DISC, u64(amountIn), u64(minOut), feeBps]);
   const cnt = Buffer.alloc(4); cnt.writeUInt32LE(legs.length);
   const parts = legs.map((l) => {
     const off = Buffer.alloc(2); off.writeUInt16LE(l.offset);
@@ -76,6 +77,9 @@ function routeIx(user, src, dest, minOut) {
     keys: [
       { pubkey: user.publicKey, isSigner: true, isWritable: false }, // authority
       w(dest), // output_token_account
+      ro(TOKEN), // token_program
+      w(dest), // protocol_fee_account (unused: 300 * 20bps floors to 0)
+      w(dest), // integrator_fee_account (unused: bps 0)
       ...remaining,
     ],
     data: routeData(300, minOut, legs),

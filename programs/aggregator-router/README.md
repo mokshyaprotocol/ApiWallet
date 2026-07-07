@@ -41,6 +41,29 @@ off-chain route-finder  ─plan─▶  aggregator_router.route()  ─CPI─▶  
    the authority's signer privilege to venues, so the only signer venues see is
    the caller (a user, or the api-wallet session PDA via `execute_trade`).
 
+## Fees (Jupiter / DFlow-style)
+
+`route(amount_in, min_amount_out, integrator_fee_bps, legs)` skims fees from the
+**output** token, then enforces `min_amount_out` on the **net** (post-fee):
+
+- **Integrator fee** — a third party integrating the router sets
+  `integrator_fee_bps` (capped at `MAX_INTEGRATOR_FEE_BPS = 255`, mirroring
+  Jupiter's historical `platformFeeBps` ceiling) and passes `integrator_fee_account`.
+  This is the "build-on-us" fee, exactly like Jupiter's `platformFeeBps` /
+  DFlow's `platformFeeBps`.
+- **Protocol fee** — a fixed `PROTOCOL_FEE_BPS` (default **20 bps = 0.20%**,
+  Jupiter's docs example) is skimmed to `protocol_fee_account`, which **must be
+  owned by `PROTOCOL_FEE_RECIPIENT`** (our treasury) — so an integrator can't
+  redirect our cut. Set `PROTOCOL_FEE_BPS = 0` to disable.
+
+Both fees are transferred via SPL-Token `Transfer`, signed by the same
+`authority` that authorizes the swap (no extra signer). `RouteExecuted` reports
+`amount_out` (gross), `net_out`, `protocol_fee`, and `integrator_fee`.
+
+Validated in `bankrun/feeRoute.test.mjs`: correct split (protocol 20 + integrator
+50 + net 9930 on 10,000 gross), min-out on the net, treasury-ownership guard, and
+the integrator-fee cap.
+
 ## Supported venues
 
 | Venue | selector | status |

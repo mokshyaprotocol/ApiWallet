@@ -24,4 +24,12 @@ pub enum RouterError {
     ZeroAmount,
     #[msg("Too many legs for one route")]
     TooManyLegs,
+    #[msg("Integrator fee exceeds the maximum allowed bps")]
+    IntegratorFeeTooHigh,
+    #[msg("A fee is set but its fee account or the token program was not provided")]
+    MissingFeeAccount,
+    #[msg("The protocol fee account is not owned by the protocol treasury")]
+    BadProtocolFeeRecipient,
+    #[msg("Fee exceeds the swap output")]
+    FeeExceedsOutput,
 }

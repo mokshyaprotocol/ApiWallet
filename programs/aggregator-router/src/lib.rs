@@ -29,15 +29,16 @@ declare_id!("7c8LDstCZnVxtcKLBdMD6YFmmNbVUTaQnZNv9Txmh8t6");
 pub mod aggregator_router {
     use super::*;
 
-    /// Execute a pre-computed route. `legs` is the ordered plan; `min_amount_out`
-    /// is enforced against the measured balance increase of
-    /// `output_token_account`.
+    /// Execute a pre-computed route. `legs` is the ordered plan; a fixed protocol
+    /// fee plus an `integrator_fee_bps` (third-party, capped) are skimmed from the
+    /// output, and `min_amount_out` is enforced on the net (post-fee) amount.
     pub fn route(
         ctx: Context<Route>,
         amount_in: u64,
         min_amount_out: u64,
+        integrator_fee_bps: u16,
         legs: Vec<SwapLeg>,
     ) -> Result<()> {
-        instructions::route::handler(ctx, amount_in, min_amount_out, legs)
+        instructions::route::handler(ctx, amount_in, min_amount_out, integrator_fee_bps, legs)
     }
 }

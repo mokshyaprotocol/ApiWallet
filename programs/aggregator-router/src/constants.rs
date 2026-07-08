@@ -39,6 +39,32 @@ impl Venue {
         })
     }
 
+    /// V-1: restrict a leg to a known *swap* instruction for its venue (by
+    /// leading discriminator/tag) — so a leg can't invoke an arbitrary venue
+    /// instruction (e.g. an LP withdrawal) even though it's the right program.
+    pub fn is_allowed_swap_ix(&self, data: &[u8]) -> bool {
+        if data.is_empty() {
+            return false;
+        }
+        // Under the test feature these venues are the SPL Token program and a
+        // "swap" is a Transfer (tag 3).
+        #[cfg(feature = "localnet-mock")]
+        if matches!(self, Venue::RaydiumAmmV4 | Venue::RaydiumClmm | Venue::RaydiumCpmm) {
+            return data[0] == 3;
+        }
+        let disc_in = |allowed: &[[u8; 8]]| data.len() >= 8 && allowed.iter().any(|d| data[0..8] == *d);
+        match self {
+            // Raydium AMM v4 uses a raw u8 tag: 9 = swapBaseIn, 11 = swapBaseOut.
+            Venue::RaydiumAmmV4 => data[0] == 9 || data[0] == 11,
+            Venue::RaydiumClmm => disc_in(&[CLMM_SWAP, CLMM_SWAP_V2]),
+            Venue::RaydiumCpmm => disc_in(&[CPMM_SWAP_BASE_IN, CPMM_SWAP_BASE_OUT]),
+            Venue::MeteoraDlmm => disc_in(&[ANCHOR_SWAP, DLMM_SWAP2]),
+            Venue::MeteoraDynamic => disc_in(&[ANCHOR_SWAP]),
+            Venue::PumpFun | Venue::PumpSwap => disc_in(&[PUMP_BUY, PUMP_SELL]),
+            Venue::Kamino => false,
+        }
+    }
+
     /// The program id this venue CPIs into.
     pub fn program_id(&self) -> Result<Pubkey> {
         Ok(match self {
@@ -106,6 +132,16 @@ pub const PROTOCOL_FEE_RECIPIENT: Pubkey = Pubkey::new_from_array([
 ]);
 
 pub const BPS_DENOMINATOR: u64 = 10_000;
+
+// V-1: allowed swap-instruction discriminators per venue (anchor sha256("global:<name>")[:8]).
+const ANCHOR_SWAP: [u8; 8] = [248, 198, 158, 145, 225, 117, 135, 200]; // "swap" (CLMM/DLMM/dynamic)
+const CLMM_SWAP: [u8; 8] = ANCHOR_SWAP;
+const CLMM_SWAP_V2: [u8; 8] = [114, 113, 45, 226, 179, 239, 106, 225]; // "swapV2"
+const CPMM_SWAP_BASE_IN: [u8; 8] = [143, 190, 90, 218, 196, 30, 51, 222]; // "swap_base_input"
+const CPMM_SWAP_BASE_OUT: [u8; 8] = [55, 217, 98, 86, 163, 74, 180, 173]; // "swap_base_output"
+const DLMM_SWAP2: [u8; 8] = [65, 75, 63, 76, 235, 91, 91, 136]; // "swap2"
+const PUMP_BUY: [u8; 8] = [102, 6, 61, 18, 1, 218, 235, 234]; // "buy"
+const PUMP_SELL: [u8; 8] = [51, 230, 133, 164, 1, 127, 131, 173]; // "sell"
 
 /// Compile-time base58 → Pubkey (const `pubkey!` alternative that avoids the
 /// macro's crate-path resolution issues under this toolchain).

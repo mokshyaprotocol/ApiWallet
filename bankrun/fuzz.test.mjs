@@ -37,6 +37,7 @@ function tokenAcct(mint, owner, amount) {
   mint.toBuffer().copy(b, 0); owner.toBuffer().copy(b, 32); b.writeBigUInt64LE(BigInt(amount), 64); b[108] = 1;
   return b;
 }
+function mintAcct(decimals = 6) { const b = Buffer.alloc(82); b[44] = decimals; b[45] = 1; return b; }
 const readAmt = (svm, pk) => { const a = svm.getAccount(pk); return a ? Buffer.from(a.data).readBigUInt64LE(64) : 0n; };
 const w = (pk) => ({ pubkey: pk, isSigner: false, isWritable: true });
 const ro = (pk) => ({ pubkey: pk, isSigner: false, isWritable: false });
@@ -81,6 +82,7 @@ for (let i = 0; i < ITERS; i++) {
   }
 
   // structured: valid accounts, randomized scalars + legs
+  svm.setAccount(mint, { lamports: 3_000_000, data: mintAcct(6), owner: TOKEN, executable: false, rentEpoch: 0 });
   const nLegs = ri(11); // 0..10 (incl 0 and >MAX_LEGS)
   const feeBps = ri(400); // 0..399 (incl >255)
   const legAmts = Array.from({ length: nLegs }, () => 1 + ri(100_000));
@@ -106,7 +108,7 @@ for (let i = 0; i < ITERS; i++) {
   for (const s of srcs) remaining.push(w(s), w(dest), { pubkey: user.publicKey, isSigner: true, isWritable: false });
   remaining.push(ro(TOKEN));
   const keys = [
-    { pubkey: user.publicKey, isSigner: true, isWritable: false }, w(srcs[0] ?? dest), w(dest), ro(TOKEN), w(protoFee), w(intFee), ...remaining,
+    { pubkey: user.publicKey, isSigner: true, isWritable: false }, w(srcs[0] ?? dest), ro(mint), w(dest), ro(TOKEN), w(protoFee), w(intFee), ...remaining,
   ];
   const before = readAmt(svm, dest);
   const r = send({ programId: ROUTER, keys, data });

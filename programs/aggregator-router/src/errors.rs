@@ -42,4 +42,6 @@ pub enum RouterError {
     InputExceedsMax,
     #[msg("input/output token account is not owned by the authority")]
     BadTokenOwner,
+    #[msg("leg instruction is not an allowed swap for its venue")]
+    DisallowedInstruction,
 }

@@ -30,16 +30,24 @@ function tokenAcct(mint, owner, amount) {
   b[108] = 1;
   return b;
 }
+// SPL Mint (82 bytes): decimals@44, is_initialized@45.
+function mintAcct(decimals = 6) {
+  const b = Buffer.alloc(82);
+  b[44] = decimals;
+  b[45] = 1;
+  return b;
+}
 const readAmt = (d) => Buffer.from(d).readBigUInt64LE(64);
 const transferData = (amt) => { const b = Buffer.alloc(9); b[0] = 3; b.writeBigUInt64LE(BigInt(amt), 1); return b; };
 
-function routeData(inMint, outMint, amountIn, minOut, integratorFeeBps, legAmt) {
-  const leg = Buffer.concat([Buffer.from([0]), u16(0), u16(3), (() => { const l = Buffer.alloc(4); l.writeUInt32LE(9); return l; })(), transferData(legAmt)]);
+function routeData(inMint, outMint, amountIn, minOut, integratorFeeBps, legAmt, legTag = 3) {
+  const legIxData = Buffer.concat([Buffer.from([legTag]), u64(legAmt)]); // [tag, amount]
+  const leg = Buffer.concat([Buffer.from([0]), u16(0), u16(3), (() => { const l = Buffer.alloc(4); l.writeUInt32LE(legIxData.length); return l; })(), legIxData]);
   const cnt = Buffer.alloc(4); cnt.writeUInt32LE(1);
   return Buffer.concat([ROUTE_DISC, inMint.toBuffer(), outMint.toBuffer(), u64(amountIn), u64(minOut), u16(integratorFeeBps), cnt, leg]);
 }
 
-function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN, amountIn = 10_000, routeInMint, legAmt = 10_000, destOwner }) {
+function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN, amountIn = 10_000, routeInMint, legAmt = 10_000, destOwner, legTag = 3 }) {
   const svm = new LiteSVM();
   svm.addProgramFromFile(ROUTER, soPath);
   const user = new Keypair();
@@ -48,6 +56,7 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   const src = Keypair.generate().publicKey, dest = Keypair.generate().publicKey;
   const protoFee = Keypair.generate().publicKey, intFee = Keypair.generate().publicKey;
   const set = (pk, owner, amt) => svm.setAccount(pk, { lamports: 3_000_000, data: tokenAcct(mint, owner, amt), owner: TOKEN, executable: false, rentEpoch: 0 });
+  svm.setAccount(mint, { lamports: 3_000_000, data: mintAcct(6), owner: TOKEN, executable: false, rentEpoch: 0 });
   set(src, user.publicKey, 10_000);
   set(dest, destOwner ?? user.publicKey, 0);
   set(protoFee, protocolOwner, 0);
@@ -58,6 +67,7 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   const keys = [
     { pubkey: user.publicKey, isSigner: true, isWritable: false }, // authority
     w(src),         // input_token_account (input spent from here)
+    ro(mint),       // output_mint_account
     w(dest),        // output_token_account
     ro(tokenProgram), // token_program
     w(protoFee),    // protocol_fee_account
@@ -66,7 +76,7 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
     w(src), w(dest), { pubkey: user.publicKey, isSigner: true, isWritable: false }, ro(TOKEN),
   ];
   const inMint = routeInMint ?? new PublicKey(mint);
-  const ix = { programId: ROUTER, keys, data: routeData(inMint, new PublicKey(mint), amountIn, minOut, integratorFeeBps, legAmt) };
+  const ix = { programId: ROUTER, keys, data: routeData(inMint, new PublicKey(mint), amountIn, minOut, integratorFeeBps, legAmt, legTag) };
   const msg = new TransactionMessage({ payerKey: user.publicKey, recentBlockhash: svm.latestBlockhash(), instructions: [ix] }).compileToV0Message();
   const tx = new VersionedTransaction(msg);
   tx.sign([user]);
@@ -134,4 +144,11 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   console.log("✅ 8. output must be authority-owned (foreign-account exfiltration rejected, fee-independent)");
 }
 
-console.log("\nFee model + M-1 + token_program + output-owner (V-4) security fixes validated.");
+// 9) V-1: a non-swap leg instruction (wrong tag) is rejected.
+{
+  const { res } = scenario({ integratorFeeBps: 0, minOut: 0, legTag: 5 }); // 5 != token Transfer(3)
+  assert.ok(res.constructor?.name?.includes("Failed"), "should revert: leg is not an allowed swap instruction");
+  console.log("✅ 9. non-swap leg instruction rejected (V-1: swaps-only per venue)");
+}
+
+console.log("\nAll security fixes validated: fee model, M-1, token_program, V-4 (output owner), V-1 (swaps-only).");

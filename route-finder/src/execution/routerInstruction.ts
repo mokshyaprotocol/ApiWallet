@@ -4,10 +4,11 @@
  * RouterPlan, and assemble it as a web3.js instruction.
  *
  * The route() account list is
- *   [authority, input_token_account, output_token_account, token_program,
- *    protocol_fee_account, integrator_fee_account, ...plan.accounts]
+ *   [authority, input_token_account, output_mint_account, output_token_account,
+ *    token_program, protocol_fee_account, integrator_fee_account,
+ *    ...plan.accounts]
  * — the plan's `accountOffset` values index into the remaining accounts (the
- * part after the six named accounts), matching the program.
+ * part after the seven named accounts), matching the program.
  */
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { RouterPlan } from "./types.js";
@@ -66,6 +67,7 @@ export function buildRouteInstruction(
   const keys = [
     { pubkey: a.authority, isSigner: true, isWritable: false },
     { pubkey: a.inputTokenAccount, isSigner: false, isWritable: true },
+    { pubkey: a.outputMint, isSigner: false, isWritable: false }, // output_mint_account
     { pubkey: a.outputTokenAccount, isSigner: false, isWritable: true },
     { pubkey: a.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: a.protocolFeeAccount, isSigner: false, isWritable: true },

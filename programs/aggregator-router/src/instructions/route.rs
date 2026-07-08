@@ -54,6 +54,11 @@ pub struct Route<'info> {
     #[account(mut)]
     pub input_token_account: UncheckedAccount<'info>,
 
+    /// CHECK: the output token's mint account. Verified to equal `output_mint`;
+    /// its `decimals` are used for `transferChecked` fee transfers (so
+    /// Token-2022 fee-extension mints work). Read-only.
+    pub output_mint_account: UncheckedAccount<'info>,
+
     /// CHECK: SPL token account for the output token; router reads its `amount`
     /// (offset 64) before/after and skims fees out of it. Mut: venues + fee
     /// transfers write to it.
@@ -98,32 +103,46 @@ fn read_token_mint(ai: &AccountInfo) -> Result<Pubkey> {
     Ok(Pubkey::try_from(&data[0..32]).map_err(|_| RouterError::BadTokenAccount)?)
 }
 
+/// SPL mint `decimals` (u8 at offset 44). Shared by classic + Token-2022 base.
+fn read_mint_decimals(ai: &AccountInfo) -> Result<u8> {
+    let data = ai.try_borrow_data()?;
+    require!(data.len() >= 45, RouterError::BadTokenAccount);
+    Ok(data[44])
+}
+
 fn fee_amount(gross: u64, bps: u16) -> u64 {
     ((gross as u128 * bps as u128) / BPS_DENOMINATOR as u128) as u64
 }
 
-/// CPI an SPL-Token `Transfer` (tag 3) of `amount` from `source` to `dest`,
-/// signed by `authority` (a signer in this instruction's context).
-fn transfer_token<'info>(
+/// CPI an SPL-Token `TransferChecked` (tag 12) of `amount` from `source` to
+/// `dest`, signed by `authority`. Using the checked variant (with the mint +
+/// decimals) makes fee transfers work for Token-2022 fee-extension mints, where
+/// the plain `Transfer` is disabled.
+#[allow(clippy::too_many_arguments)]
+fn transfer_checked<'info>(
     token_program: &AccountInfo<'info>,
     source: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
     dest: &AccountInfo<'info>,
     authority: &AccountInfo<'info>,
     amount: u64,
+    decimals: u8,
 ) -> Result<()> {
-    let mut data = Vec::with_capacity(9);
-    data.push(3u8);
+    let mut data = Vec::with_capacity(10);
+    data.push(12u8); // TransferChecked
     data.extend_from_slice(&amount.to_le_bytes());
+    data.push(decimals);
     let ix = Instruction {
         program_id: *token_program.key,
         accounts: vec![
             AccountMeta::new(*source.key, false),
+            AccountMeta::new_readonly(*mint.key, false),
             AccountMeta::new(*dest.key, false),
             AccountMeta::new_readonly(*authority.key, true),
         ],
         data,
     };
-    invoke(&ix, &[source.clone(), dest.clone(), authority.clone(), token_program.clone()])?;
+    invoke(&ix, &[source.clone(), mint.clone(), dest.clone(), authority.clone(), token_program.clone()])?;
     Ok(())
 }
 
@@ -149,6 +168,8 @@ pub fn handler(
     // which are enforced against these mints upstream, actually govern the swap).
     require!(read_token_mint(&input_ai)? == input_mint, RouterError::InputMintMismatch);
     require!(read_token_mint(&output_ai)? == output_mint, RouterError::OutputMintMismatch);
+    let mint_ai = ctx.accounts.output_mint_account.to_account_info();
+    require!(mint_ai.key() == output_mint, RouterError::OutputMintMismatch);
 
     // SECURITY: input and output must be the authority's own token accounts.
     // Enforce this explicitly (not just implicitly via the fee transfer, which
@@ -163,7 +184,10 @@ pub fn handler(
 
     // Execute each leg as a CPI into its (allowlisted) venue.
     for leg in legs.iter() {
-        let program_id = Venue::from_u8(leg.venue)?.program_id()?;
+        let venue = Venue::from_u8(leg.venue)?;
+        // V-1: only allow known *swap* instructions for the venue.
+        require!(venue.is_allowed_swap_ix(&leg.data), RouterError::DisallowedInstruction);
+        let program_id = venue.program_id()?;
         let start = leg.account_offset as usize;
         let end = start.checked_add(leg.account_len as usize).ok_or(RouterError::Overflow)?;
         require!(end <= infos.len(), RouterError::AccountRangeOutOfBounds);
@@ -204,6 +228,7 @@ pub fn handler(
     let tp = token_program_ai.key();
     require!(tp == TOKEN_PROGRAM || tp == TOKEN_2022_PROGRAM, RouterError::UnexpectedTokenProgram);
     require!(tp == *output_ai.owner, RouterError::UnexpectedTokenProgram);
+    let decimals = read_mint_decimals(&mint_ai)?;
 
     if protocol_fee > 0 {
         let dest = ctx.accounts.protocol_fee_account.to_account_info();
@@ -211,11 +236,11 @@ pub fn handler(
             read_token_owner(&dest)? == PROTOCOL_FEE_RECIPIENT,
             RouterError::BadProtocolFeeRecipient
         );
-        transfer_token(&token_program_ai, &output_ai, &dest, &authority_ai, protocol_fee)?;
+        transfer_checked(&token_program_ai, &output_ai, &mint_ai, &dest, &authority_ai, protocol_fee, decimals)?;
     }
     if integrator_fee > 0 {
         let dest = ctx.accounts.integrator_fee_account.to_account_info();
-        transfer_token(&token_program_ai, &output_ai, &dest, &authority_ai, integrator_fee)?;
+        transfer_checked(&token_program_ai, &output_ai, &mint_ai, &dest, &authority_ai, integrator_fee, decimals)?;
     }
 
     // SECURITY (defense in depth): enforce min_amount_out on the ACTUAL output

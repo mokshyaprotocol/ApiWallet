@@ -32,6 +32,7 @@ function tokenAcct(mint, owner, amount) {
   b[108] = 1;
   return b;
 }
+function mintAcct(decimals = 6) { const b = Buffer.alloc(82); b[44] = decimals; b[45] = 1; return b; }
 const readAmount = (d) => Buffer.from(d).readBigUInt64LE(64);
 const transferData = (amt) => { const b = Buffer.alloc(9); b[0] = 3; b.writeBigUInt64LE(BigInt(amt), 1); return b; };
 
@@ -58,6 +59,7 @@ function setup() {
   const mint = Keypair.generate().publicKey;
   const src = [0, 1, 2].map(() => Keypair.generate().publicKey);
   const dest = Keypair.generate().publicKey;
+  svm.setAccount(mint, { lamports: 3_000_000, data: mintAcct(6), owner: TOKEN, executable: false, rentEpoch: 0 });
   src.forEach((s) => svm.setAccount(s, { lamports: 3_000_000, data: tokenAcct(mint, user.publicKey, 100), owner: TOKEN, executable: false, rentEpoch: 0 }));
   svm.setAccount(dest, { lamports: 3_000_000, data: tokenAcct(mint, user.publicKey, 0), owner: TOKEN, executable: false, rentEpoch: 0 });
   return { svm, user, src, dest, mint };
@@ -77,6 +79,7 @@ function routeIx(user, src, dest, minOut, mint) {
     keys: [
       { pubkey: user.publicKey, isSigner: true, isWritable: false }, // authority
       w(src[0]), // input_token_account (one input source; spent=100 <= amount_in)
+      ro(mint), // output_mint_account
       w(dest), // output_token_account
       ro(TOKEN), // token_program
       w(dest), // protocol_fee_account (unused: 300 * 20bps floors to 0)

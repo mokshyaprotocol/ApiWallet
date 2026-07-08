@@ -81,7 +81,7 @@ input account (venue-specific; future work).
 `route()` CPIs external DEX programs, forwarding caller-controlled accounts +
 data with the authority's signature. Threat model of that surface:
 
-### V-4 — output/input account owner not explicitly verified  ✅ FIXED
+### V-4 — output/input account owner not explicitly verified  ✅ FIXED  (MEDIUM)
 The output account's owner was only *implicitly* checked (the fee transfer, from
 output, is signed by the authority so it must own the account). But the fee
 rounds to 0 for small swaps (`received < 500` → protocol fee 0), so a malicious
@@ -90,27 +90,49 @@ session key could route a small swap's output to a **foreign account**
 `input_token_account.owner == output_token_account.owner == authority`,
 independent of fees. Test: `feeRoute.test.mjs` case 8.
 
-### V-1 — `route()` forwards arbitrary instruction data to an allowlisted venue  ⚠️ DOCUMENTED
-A leg's `data` is opaque and forwarded verbatim; `route()` pins the venue
-*program* but not the *instruction*. So a caller can invoke any venue
-instruction the authority can sign (not just "swap") — e.g. an LP withdrawal.
-Bounded by the enforced constraints (output must gain ≥ `min_amount_out` of
-`output_mint` into an authority-owned account; input spent ≤ `amount_in` from an
-authority-owned account) and by session-PDA custody scope. **Recommendation:**
-for a hard "swaps only" guarantee, allowlist specific instruction discriminators
-per venue (e.g. Raydium `swapBaseIn`, Meteora `swap2`, PumpSwap `buy`/`sell`),
-not just the program id.
+Severity is MEDIUM, not HIGH: exploitation is gated to the fee-rounds-to-zero
+band (`received * 20 / 10000 == 0`, i.e. `received < 500` base units), so it was
+a low-throughput exfiltration of small per-trade amounts by an *already*
+malicious session key, not a bulk drain — and it is now closed regardless of
+amount.
 
-### V-2 — Token-2022 transfer-fee / transfer-hook output mints  ⚠️ DOCUMENTED (compat/liveness)
-The fee skim uses the plain SPL-Token `Transfer` (tag 3). For a Token-2022
-output mint with a **transfer hook**, tag-3 transfer reverts (hook not invoked)
-→ the whole route reverts (since the protocol fee is always on) — a
-liveness/DoS for that token class, which **includes many graduated Pump
-tokens**. For **transfer-fee** mints, the fee recipient receives less than the
-transferred amount. Neither loses user funds (slippage is enforced on the real
-post-transfer balance), but it blocks/《skews》 fee collection for extension mints.
-**Recommendation:** use `transferChecked` (+ resolve transfer-hook extra
-accounts) for Token-2022, or waive the protocol fee for extension mints.
+### V-1 — `route()` forwards arbitrary instruction data to an allowlisted venue  ✅ FIXED
+A leg's `data` was opaque and forwarded verbatim; `route()` pinned the venue
+*program* but not the *instruction*. So a caller could invoke any venue
+instruction the authority can sign (not just "swap") — e.g. an LP withdrawal.
+
+**Fix** (`constants.rs` / `route.rs`): each leg is now checked against a
+per-venue **swap-instruction allowlist** before the CPI —
+`require!(venue.is_allowed_swap_ix(&leg.data), DisallowedInstruction)`. Allowed
+selectors: Raydium AMM v4 `swapBaseIn`(9)/`swapBaseOut`(11), Raydium CLMM
+`swap`/`swapV2`, Raydium CPMM `swapBaseIn`/`swapBaseOut`, Meteora DLMM
+`swap`/`swap2`, Meteora Dynamic `swap`, Pump/PumpSwap `buy`/`sell` (Anchor
+discriminators). Any other instruction to a venue program is rejected. Test:
+`feeRoute.test.mjs` case 9 (non-swap leg rejected); still bounded by the
+output-gain / input-cap / session-PDA constraints as defense in depth.
+
+### V-2 — Token-2022 transfer-fee / transfer-hook output mints  ✅ FIXED (partial — transfer-fee; hook documented)
+The fee skim previously used the plain SPL-Token `Transfer` (tag 3), which
+reverts on a mint owned by the Token-2022 program.
+
+**Fix** (`instructions/route.rs`): the fee transfers now use `transferChecked`
+(tag 12) and the `token_program` is bound to the **actual owner** of the output
+account (`token_program == output_token_account.owner ∈ {SPL Token,
+Token-2022}`, from the H-1 fix). So a Token-2022 output mint now collects fees
+correctly. `route()` takes an explicit `output_mint_account`, checks it equals
+the declared `output_mint`, reads its `decimals` (offset 44), and passes them to
+`transferChecked` — which also validates the transferred amount against the
+mint. Tests: all `feeRoute.test.mjs` cases run through `transferChecked` (a real
+SPL mint account is injected); fuzz clean over 4,000 iters.
+
+**Residual (transfer-hook mints, DOCUMENTED):** for a Token-2022 mint with a
+**transfer hook**, `transferChecked` alone still reverts unless the hook's extra
+accounts are resolved and appended — so the route reverts (since the protocol
+fee is always on) for that token class, a liveness limitation that **includes
+some graduated Pump tokens**. No user funds are lost (slippage is enforced on
+the real post-transfer balance). Full support requires resolving the hook's
+`ExtraAccountMetaList` per mint, or waiving the protocol fee for hook mints
+(future work). Transfer-*fee* mints (the common extension) are handled.
 
 ### V-3 — venues are upgradeable and trusted  ⚠️ INHERENT
 Raydium/Meteora/Pump are upgradeable by their teams. A malicious/compromised
@@ -137,7 +159,8 @@ account validity, and malformed instruction data. It asserts route() never
 panics and never succeeds while violating an invariant (net-out ≥ min_out, exact
 post-fee net, protocol fee only to the treasury, integrator-fee/leg caps,
 input-spent cap, no success on garbage data). Clean over 4,000 iterations across
-5 seeds (~576 executed swaps + adversarial reverts, 0 violations).
+5 seeds (550 executed swaps through `transferChecked` + adversarial reverts, 0
+violations).
 
 ## Operational notes
 - **Never enable the `mock-router` / `localnet-mock` features in a production

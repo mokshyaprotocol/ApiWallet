@@ -10,13 +10,21 @@ They inject funded SPL token accounts directly and drive real CPIs.
 ## What they prove
 
 - **`routerSwap.test.mjs`** — `aggregator_router.route()` executes a real
-  token-moving swap, enforces the aggregate `min_amount_out` (slippage), and
-  rejects a disabled venue. (3/3)
+  token-moving swap (dest credited **net of the 0.20% protocol fee**), enforces
+  the aggregate `min_amount_out` (slippage), and rejects a venue with no allowed
+  swap instruction. (3/3)
 - **`fullChain.test.mjs`** — the full path: `delegated_trading.execute_trade`
   (session key signs, no owner approval) → CPI into `aggregator_router.route()`
-  → SPL token transfer. Funds move, the session PDA's lent signature propagates
-  through the router to the venue, the nonce advances, and a replayed nonce is
-  rejected. (3/3)
+  → SPL token transfer. Funds move (dest nets 499,000 of a 500,000 swap; the
+  1,000 protocol fee lands in the treasury account), the session PDA's lent
+  signature propagates through the router to the venue, the nonce advances, and
+  a replayed nonce is rejected. (3/3)
+- **`feeRoute.test.mjs`** — the fee model (Jupiter/DFlow-style) and the security
+  fixes: protocol + integrator fee split via `transferChecked`, `min_amount_out`
+  on the post-fee net, treasury-owned protocol-fee guard, integrator-fee cap,
+  and the rejection cases for a malicious `token_program`, `input_mint` mismatch,
+  over-cap input (M-1), foreign output owner (V-4), and a non-swap leg (V-1).
+  (9/9)
 
 - **`threeVenue.test.mjs`** — proves **three venues in one versioned (v0)
   transaction**: `route()` runs 3 legs with distinct venue selectors atomically
@@ -35,7 +43,7 @@ npx tsx bankrun/threeVenue.test.mjs
   succeeds while violating an invariant** (net-out ≥ min_out, exact net after
   fees, protocol fee → treasury only, integrator-fee cap, leg cap, input-spent
   cap, no success on garbage). Clean over 4,000 iterations / 5 seeds
-  (~576 successful swaps + reverts, 0 violations).
+  (550 successful swaps through `transferChecked` + reverts, 0 violations).
 
 ```bash
 npx tsx bankrun/fuzz.test.mjs [iterations] [seedHex]
@@ -82,8 +90,24 @@ regenerate with the fetch scripts.
 anchor build -p delegated_trading                                # real router id
 anchor build -p aggregator_router -- --features localnet-mock    # token = venue
 
-# Run:
-npm run test:bankrun
-# or individually:
-SBF_OUT_DIR=$PWD/target/deploy npx tsx bankrun/fullChain.test.mjs
+# The whole local suite (no RPC / fixtures needed):
+export SBF_OUT_DIR=$PWD/target/deploy
+npx tsx bankrun/routerSwap.test.mjs      # 3/3
+npx tsx bankrun/fullChain.test.mjs       # 3/3
+npx tsx bankrun/feeRoute.test.mjs        # 9/9
+npx tsx bankrun/threeVenue.test.mjs      # 2/2
+npx tsx bankrun/fuzz.test.mjs 800 0xC0FFEE
+
+# or via package.json scripts:
+npm run test:bankrun     # routerSwap + fullChain
+npm run test:fee         # feeRoute
+npm run test:threevenue  # threeVenue
+npm run test:fuzz        # fuzz
 ```
+
+> After editing `route.rs`, **rebuild `aggregator_router.so` before rerunning** —
+> `solana-bankrun`'s name-based loader reads a stale `.so` silently otherwise.
+
+Last local run (this environment): **routerSwap 3/3 · fullChain 3/3 ·
+feeRoute 9/9 · threeVenue 2/2 · fuzz clean (4,000 iters / 5 seeds, 0
+violations)**.

@@ -97,6 +97,30 @@ anchor test -- --features mock-router
 > mock program's id, update the `mock-router` constant in
 > `programs/delegated-trading/src/constants.rs` accordingly.
 
+### In-process SVM tests (bankrun / litesvm)
+
+`anchor test` needs a local validator, which fails in some environments
+(`solana-test-validator` hits a rocksdb "blockstore error"). The same programs
+are covered by **in-process SVM tests** that run the real SVM in Node — no
+validator required. These are the fastest way to validate a change locally.
+
+```bash
+# Build the program inputs (from repo root):
+anchor build -p delegated_trading                              # real router id
+anchor build -p aggregator_router -- --features localnet-mock  # token = venue
+
+# Run the local suite (no RPC / fixtures needed):
+export SBF_OUT_DIR=$PWD/target/deploy
+npx tsx bankrun/routerSwap.test.mjs     # route() swap + slippage + venue guard
+npx tsx bankrun/fullChain.test.mjs      # execute_trade -> route() -> swap, approval-free
+npx tsx bankrun/feeRoute.test.mjs       # fee model + M-1/V-1/V-4/token_program guards
+npx tsx bankrun/threeVenue.test.mjs     # 3 venues atomically in one v0 tx
+npx tsx bankrun/fuzz.test.mjs 800 0xC0FFEE   # seeded property fuzz of route()
+```
+
+See [`bankrun/README.md`](bankrun/README.md) for details, plus the
+mainnet-clone swap tests (Meteora DLMM, Pump) that need an RPC endpoint.
+
 ## Tests covered
 
 create / update / revoke session · expired session · invalid signer · invalid

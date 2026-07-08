@@ -76,6 +76,60 @@ input account (venue-specific; future work).
 - **Venue allowlist** — `route()` legs can only CPI the hardcoded `Venue`
   program ids.
 
+## Venue-integration security (Raydium / Meteora / Pump)
+
+`route()` CPIs external DEX programs, forwarding caller-controlled accounts +
+data with the authority's signature. Threat model of that surface:
+
+### V-4 — output/input account owner not explicitly verified  ✅ FIXED
+The output account's owner was only *implicitly* checked (the fee transfer, from
+output, is signed by the authority so it must own the account). But the fee
+rounds to 0 for small swaps (`received < 500` → protocol fee 0), so a malicious
+session key could route a small swap's output to a **foreign account**
+(exfiltration). Fixed: `route()` now explicitly requires
+`input_token_account.owner == output_token_account.owner == authority`,
+independent of fees. Test: `feeRoute.test.mjs` case 8.
+
+### V-1 — `route()` forwards arbitrary instruction data to an allowlisted venue  ⚠️ DOCUMENTED
+A leg's `data` is opaque and forwarded verbatim; `route()` pins the venue
+*program* but not the *instruction*. So a caller can invoke any venue
+instruction the authority can sign (not just "swap") — e.g. an LP withdrawal.
+Bounded by the enforced constraints (output must gain ≥ `min_amount_out` of
+`output_mint` into an authority-owned account; input spent ≤ `amount_in` from an
+authority-owned account) and by session-PDA custody scope. **Recommendation:**
+for a hard "swaps only" guarantee, allowlist specific instruction discriminators
+per venue (e.g. Raydium `swapBaseIn`, Meteora `swap2`, PumpSwap `buy`/`sell`),
+not just the program id.
+
+### V-2 — Token-2022 transfer-fee / transfer-hook output mints  ⚠️ DOCUMENTED (compat/liveness)
+The fee skim uses the plain SPL-Token `Transfer` (tag 3). For a Token-2022
+output mint with a **transfer hook**, tag-3 transfer reverts (hook not invoked)
+→ the whole route reverts (since the protocol fee is always on) — a
+liveness/DoS for that token class, which **includes many graduated Pump
+tokens**. For **transfer-fee** mints, the fee recipient receives less than the
+transferred amount. Neither loses user funds (slippage is enforced on the real
+post-transfer balance), but it blocks/《skews》 fee collection for extension mints.
+**Recommendation:** use `transferChecked` (+ resolve transfer-hook extra
+accounts) for Token-2022, or waive the protocol fee for extension mints.
+
+### V-3 — venues are upgradeable and trusted  ⚠️ INHERENT
+Raydium/Meteora/Pump are upgradeable by their teams. A malicious/compromised
+venue upgrade, given the authority's signature, could touch session-PDA accounts
+**beyond** the declared `input_token_account` (our caps bind only the declared
+input + the output). This is the irreducible trust of CPI-ing external programs.
+Our checks bound the *declared* accounts; to bound the rest, **fund the session
+PDA per-trade and keep minimal balances in it.**
+
+### Verified safe
+- **No reentrancy** — the Solana runtime forbids a program being re-entered; our
+  fee state changes happen after the venue CPIs regardless.
+- **Program pinning** — venue ids are hardcoded (`Venue` enum, unit-tested);
+  `invoke()` exposes only each leg's slice accounts to the venue, not the whole
+  remaining-accounts pool.
+- **CPI depth** — `execute_trade → route → venue → token program` sits at
+  Solana's depth limit (4); a venue doing deeper internal CPIs would fail
+  (liveness, not a safety issue) — call `route()` directly for deep routes.
+
 ## Fuzzing
 `bankrun/fuzz.test.mjs` runs a seeded property fuzz of `route()` against the real
 program bytecode (litesvm): randomized amounts, fee bps, leg counts/offsets,

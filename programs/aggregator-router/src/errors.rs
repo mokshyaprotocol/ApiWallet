@@ -40,4 +40,6 @@ pub enum RouterError {
     OutputMintMismatch,
     #[msg("input spent exceeds amount_in")]
     InputExceedsMax,
+    #[msg("input/output token account is not owned by the authority")]
+    BadTokenOwner,
 }

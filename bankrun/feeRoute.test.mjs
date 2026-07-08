@@ -39,7 +39,7 @@ function routeData(inMint, outMint, amountIn, minOut, integratorFeeBps, legAmt) 
   return Buffer.concat([ROUTE_DISC, inMint.toBuffer(), outMint.toBuffer(), u64(amountIn), u64(minOut), u16(integratorFeeBps), cnt, leg]);
 }
 
-function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN, amountIn = 10_000, routeInMint, legAmt = 10_000 }) {
+function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN, amountIn = 10_000, routeInMint, legAmt = 10_000, destOwner }) {
   const svm = new LiteSVM();
   svm.addProgramFromFile(ROUTER, soPath);
   const user = new Keypair();
@@ -49,7 +49,7 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   const protoFee = Keypair.generate().publicKey, intFee = Keypair.generate().publicKey;
   const set = (pk, owner, amt) => svm.setAccount(pk, { lamports: 3_000_000, data: tokenAcct(mint, owner, amt), owner: TOKEN, executable: false, rentEpoch: 0 });
   set(src, user.publicKey, 10_000);
-  set(dest, user.publicKey, 0);
+  set(dest, destOwner ?? user.publicKey, 0);
   set(protoFee, protocolOwner, 0);
   set(intFee, user.publicKey, 0);
 
@@ -126,4 +126,12 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   console.log("✅ 7. input spent capped at amount_in (over-cap swap rejected)");
 }
 
-console.log("\nFee model + M-1 (mint/amount binding) + token_program security fixes validated.");
+// 8) V-4: output must be the authority's own account — even for a tiny swap
+//    where the fee rounds to 0 (no fee transfer), foreign output is rejected.
+{
+  const { res } = scenario({ integratorFeeBps: 0, minOut: 0, amountIn: 400, legAmt: 400, destOwner: Keypair.generate().publicKey });
+  assert.ok(res.constructor?.name?.includes("Failed"), "should revert: output account not owned by authority");
+  console.log("✅ 8. output must be authority-owned (foreign-account exfiltration rejected, fee-independent)");
+}
+
+console.log("\nFee model + M-1 + token_program + output-owner (V-4) security fixes validated.");

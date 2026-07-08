@@ -150,6 +150,14 @@ pub fn handler(
     require!(read_token_mint(&input_ai)? == input_mint, RouterError::InputMintMismatch);
     require!(read_token_mint(&output_ai)? == output_mint, RouterError::OutputMintMismatch);
 
+    // SECURITY: input and output must be the authority's own token accounts.
+    // Enforce this explicitly (not just implicitly via the fee transfer, which
+    // is skipped when the fee rounds to 0) — otherwise a caller could route the
+    // output to a foreign account (exfiltrating the swapped funds).
+    let authority_key = ctx.accounts.authority.key();
+    require!(read_token_owner(&input_ai)? == authority_key, RouterError::BadTokenOwner);
+    require!(read_token_owner(&output_ai)? == authority_key, RouterError::BadTokenOwner);
+
     let input_before = read_token_amount(&input_ai)?;
     let before = read_token_amount(&output_ai)?;
 

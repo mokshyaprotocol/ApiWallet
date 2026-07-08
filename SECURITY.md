@@ -76,6 +76,15 @@ input account (venue-specific; future work).
 - **Venue allowlist** — `route()` legs can only CPI the hardcoded `Venue`
   program ids.
 
+## Fuzzing
+`bankrun/fuzz.test.mjs` runs a seeded property fuzz of `route()` against the real
+program bytecode (litesvm): randomized amounts, fee bps, leg counts/offsets,
+account validity, and malformed instruction data. It asserts route() never
+panics and never succeeds while violating an invariant (net-out ≥ min_out, exact
+post-fee net, protocol fee only to the treasury, integrator-fee/leg caps,
+input-spent cap, no success on garbage data). Clean over 4,000 iterations across
+5 seeds (~576 executed swaps + adversarial reverts, 0 violations).
+
 ## Operational notes
 - **Never enable the `mock-router` / `localnet-mock` features in a production
   build** — they remap program ids for tests. Production = default features.

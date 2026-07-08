@@ -29,6 +29,18 @@ anchor build -p aggregator_router -- --features localnet-mock
 npx tsx bankrun/threeVenue.test.mjs
 ```
 
+- **`fuzz.test.mjs`** — seeded property fuzz of `route()` against the real
+  program bytecode. Randomizes scalars, legs, fee bps, account validity, and
+  malformed instruction data; asserts route() **never panics** and **never
+  succeeds while violating an invariant** (net-out ≥ min_out, exact net after
+  fees, protocol fee → treasury only, integrator-fee cap, leg cap, input-spent
+  cap, no success on garbage). Clean over 4,000 iterations / 5 seeds
+  (~576 successful swaps + reverts, 0 violations).
+
+```bash
+npx tsx bankrun/fuzz.test.mjs [iterations] [seedHex]
+```
+
 To let a token Transfer stand in for a DEX swap in-process, `aggregator_router`
 is built with the **`localnet-mock`** feature, which maps the first three venue
 slots to the SPL Token program. Production builds never enable it.

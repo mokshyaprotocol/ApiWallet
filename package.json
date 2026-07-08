@@ -9,7 +9,8 @@
     "test": "anchor test -- --features mock-router",
     "test:bankrun": "SBF_OUT_DIR=$PWD/target/deploy tsx bankrun/routerSwap.test.mjs && SBF_OUT_DIR=$PWD/target/deploy tsx bankrun/fullChain.test.mjs",
     "test:threevenue": "tsx bankrun/threeVenue.test.mjs",
-    "test:fee": "tsx bankrun/feeRoute.test.mjs"
+    "test:fee": "tsx bankrun/feeRoute.test.mjs",
+    "test:fuzz": "tsx bankrun/fuzz.test.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0"

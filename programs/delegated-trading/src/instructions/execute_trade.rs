@@ -170,6 +170,25 @@ pub fn handler<'info>(
                 now,
             ));
         }
+
+        // 6b. Bind the forwarded route to the session-checked params. The router
+        // instruction is `route(input_mint, output_mint, amount_in, ...)`, so its
+        // data is [disc(8)][input_mint(32)][output_mint(32)][amount_in(8)]...
+        // Requiring these match the allowlisted/limited values means the opaque
+        // route_data can't swap a different mint or a larger amount than approved.
+        if route_data.len() < 80
+            || route_data[0..8] != ROUTE_DISCRIMINATOR
+            || route_data[8..40] != input_mint.to_bytes()
+            || route_data[40..72] != output_mint.to_bytes()
+            || u64::from_le_bytes(route_data[72..80].try_into().unwrap()) != amount_in
+        {
+            return Err(reject(
+                &session_key,
+                &signer_key,
+                TradingError::RouteDataMismatch,
+                now,
+            ));
+        }
     }
 
     // 7. Apply accounting (mutable borrow). This enforces the daily cap and

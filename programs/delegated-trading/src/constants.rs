@@ -27,6 +27,11 @@ pub const MAX_ALLOWED_OUTPUT_TOKENS: usize = 16;
 /// Length of a rolling daily window, in seconds (24h).
 pub const DAILY_WINDOW_SECONDS: i64 = 86_400;
 
+/// Anchor discriminator of `aggregator_router::route` (sha256("global:route")[:8]).
+/// `execute_trade` requires the forwarded route_data to start with this so it
+/// can bind the route's declared mints/amount to the session's checks.
+pub const ROUTE_DISCRIMINATOR: [u8; 8] = [229, 23, 203, 151, 122, 227, 173, 42];
+
 /// The only program `execute_trade` will CPI into: our own on-chain
 /// `aggregator_router`. It refuses to call anything else, regardless of what an
 /// owner puts in `allowed_programs` — the allowlist narrows the surface, this

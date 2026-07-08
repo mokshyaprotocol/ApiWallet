@@ -32,13 +32,16 @@ pub mod aggregator_router {
     /// Execute a pre-computed route. `legs` is the ordered plan; a fixed protocol
     /// fee plus an `integrator_fee_bps` (third-party, capped) are skimmed from the
     /// output, and `min_amount_out` is enforced on the net (post-fee) amount.
+    #[allow(clippy::too_many_arguments)]
     pub fn route(
         ctx: Context<Route>,
+        input_mint: Pubkey,
+        output_mint: Pubkey,
         amount_in: u64,
         min_amount_out: u64,
         integrator_fee_bps: u16,
         legs: Vec<SwapLeg>,
     ) -> Result<()> {
-        instructions::route::handler(ctx, amount_in, min_amount_out, integrator_fee_bps, legs)
+        instructions::route::handler(ctx, input_mint, output_mint, amount_in, min_amount_out, integrator_fee_bps, legs)
     }
 }

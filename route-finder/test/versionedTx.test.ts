@@ -26,14 +26,25 @@ async function makePlan() {
 }
 
 describe("route() instruction encoding", () => {
-  it("encodes disc + amountIn + minOut + integratorFeeBps + legs vec", async () => {
+  it("encodes disc + inputMint + outputMint + amountIn + minOut + feeBps + legs", async () => {
     const plan = await makePlan();
-    const data = encodeRouteData(plan, 25);
+    const inputMint = new PublicKey("So11111111111111111111111111111111111111112");
+    const outputMint = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    const acc = {
+      routerProgramId: new PublicKey("7c8LDstCZnVxtcKLBdMD6YFmmNbVUTaQnZNv9Txmh8t6"),
+      authority: Keypair.generate().publicKey, inputTokenAccount: Keypair.generate().publicKey,
+      outputTokenAccount: Keypair.generate().publicKey, inputMint, outputMint,
+      tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+      protocolFeeAccount: Keypair.generate().publicKey, integratorFeeAccount: Keypair.generate().publicKey,
+    };
+    const data = encodeRouteData(plan, acc, 25);
     expect(Array.from(data.subarray(0, 8))).toEqual(Array.from(ROUTE_DISCRIMINATOR));
-    expect(data.readBigUInt64LE(8)).toBe(plan.amountIn);
-    expect(data.readBigUInt64LE(16)).toBe(plan.minAmountOut);
-    expect(data.readUInt16LE(24)).toBe(25); // integrator_fee_bps
-    expect(data.readUInt32LE(26)).toBe(plan.legs.length); // 1 leg
+    expect(data.subarray(8, 40).equals(inputMint.toBuffer())).toBe(true);
+    expect(data.subarray(40, 72).equals(outputMint.toBuffer())).toBe(true);
+    expect(data.readBigUInt64LE(72)).toBe(plan.amountIn);
+    expect(data.readBigUInt64LE(80)).toBe(plan.minAmountOut);
+    expect(data.readUInt16LE(88)).toBe(25); // integrator_fee_bps
+    expect(data.readUInt32LE(90)).toBe(plan.legs.length);
   });
 });
 
@@ -43,7 +54,10 @@ describe("versioned (v0) transaction + Address Lookup Table", () => {
     const accounts = {
       routerProgramId: new PublicKey("7c8LDstCZnVxtcKLBdMD6YFmmNbVUTaQnZNv9Txmh8t6"),
       authority: Keypair.generate().publicKey,
+      inputTokenAccount: Keypair.generate().publicKey,
       outputTokenAccount: Keypair.generate().publicKey,
+      inputMint: new PublicKey("So11111111111111111111111111111111111111112"),
+      outputMint: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
       tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
       protocolFeeAccount: Keypair.generate().publicKey,
       integratorFeeAccount: Keypair.generate().publicKey,

@@ -49,6 +49,11 @@ pub struct Route<'info> {
     /// `execute_trade`). Also the token authority for the fee transfers.
     pub authority: Signer<'info>,
 
+    /// CHECK: SPL token account the input is spent from; router reads its mint
+    /// (offset 0) and `amount` delta to bind `input_mint` and cap `amount_in`.
+    #[account(mut)]
+    pub input_token_account: UncheckedAccount<'info>,
+
     /// CHECK: SPL token account for the output token; router reads its `amount`
     /// (offset 64) before/after and skims fees out of it. Mut: venues + fee
     /// transfers write to it.
@@ -86,6 +91,13 @@ fn read_token_owner(ai: &AccountInfo) -> Result<Pubkey> {
     Ok(Pubkey::try_from(&data[32..64]).map_err(|_| RouterError::BadTokenAccount)?)
 }
 
+/// SPL-token `mint` (Pubkey at offset 0).
+fn read_token_mint(ai: &AccountInfo) -> Result<Pubkey> {
+    let data = ai.try_borrow_data()?;
+    require!(data.len() >= 32, RouterError::BadTokenAccount);
+    Ok(Pubkey::try_from(&data[0..32]).map_err(|_| RouterError::BadTokenAccount)?)
+}
+
 fn fee_amount(gross: u64, bps: u16) -> u64 {
     ((gross as u128 * bps as u128) / BPS_DENOMINATOR as u128) as u64
 }
@@ -117,6 +129,8 @@ fn transfer_token<'info>(
 
 pub fn handler(
     ctx: Context<Route>,
+    input_mint: Pubkey,
+    output_mint: Pubkey,
     amount_in: u64,
     min_amount_out: u64,
     integrator_fee_bps: u16,
@@ -128,7 +142,15 @@ pub fn handler(
     require!(integrator_fee_bps <= MAX_INTEGRATOR_FEE_BPS, RouterError::IntegratorFeeTooHigh);
 
     let infos = ctx.remaining_accounts;
+    let input_ai = ctx.accounts.input_token_account.to_account_info();
     let output_ai = ctx.accounts.output_token_account.to_account_info();
+
+    // Bind the swap to the declared mints (so the caller's limits/allowlists,
+    // which are enforced against these mints upstream, actually govern the swap).
+    require!(read_token_mint(&input_ai)? == input_mint, RouterError::InputMintMismatch);
+    require!(read_token_mint(&output_ai)? == output_mint, RouterError::OutputMintMismatch);
+
+    let input_before = read_token_amount(&input_ai)?;
     let before = read_token_amount(&output_ai)?;
 
     // Execute each leg as a CPI into its (allowlisted) venue.
@@ -143,6 +165,12 @@ pub fn handler(
             .collect();
         invoke(&Instruction { program_id, accounts: metas, data: leg.data.clone() }, infos)?;
     }
+
+    // Cap the input actually spent — binds the caller's per-trade amount limit
+    // to the real swap, not just a claimed number.
+    let input_after = read_token_amount(&input_ai)?;
+    let spent = input_before.checked_sub(input_after).ok_or(RouterError::Overflow)?;
+    require!(spent <= amount_in, RouterError::InputExceedsMax);
 
     // Gross output delta.
     let after = read_token_amount(&output_ai)?;

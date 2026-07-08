@@ -36,9 +36,9 @@ const readAmount = (d) => Buffer.from(d).readBigUInt64LE(64);
 const transferData = (amt) => { const b = Buffer.alloc(9); b[0] = 3; b.writeBigUInt64LE(BigInt(amt), 1); return b; };
 
 // route(amount_in, min_out, integrator_fee_bps=0, [leg0(venue0), leg1(venue1), leg2(venue2)])
-function routeData(amountIn, minOut, legs) {
+function routeData(mint, amountIn, minOut, legs) {
   const feeBps = Buffer.alloc(2); // integrator_fee_bps = 0
-  const head = Buffer.concat([ROUTE_DISC, u64(amountIn), u64(minOut), feeBps]);
+  const head = Buffer.concat([ROUTE_DISC, mint.toBuffer(), mint.toBuffer(), u64(amountIn), u64(minOut), feeBps]);
   const cnt = Buffer.alloc(4); cnt.writeUInt32LE(legs.length);
   const parts = legs.map((l) => {
     const off = Buffer.alloc(2); off.writeUInt16LE(l.offset);
@@ -60,13 +60,13 @@ function setup() {
   const dest = Keypair.generate().publicKey;
   src.forEach((s) => svm.setAccount(s, { lamports: 3_000_000, data: tokenAcct(mint, user.publicKey, 100), owner: TOKEN, executable: false, rentEpoch: 0 }));
   svm.setAccount(dest, { lamports: 3_000_000, data: tokenAcct(mint, user.publicKey, 0), owner: TOKEN, executable: false, rentEpoch: 0 });
-  return { svm, user, src, dest };
+  return { svm, user, src, dest, mint };
 }
 
 const ro = (pk) => ({ pubkey: pk, isSigner: false, isWritable: false });
 const w = (pk) => ({ pubkey: pk, isSigner: false, isWritable: true });
 
-function routeIx(user, src, dest, minOut) {
+function routeIx(user, src, dest, minOut, mint) {
   // remaining_accounts = [src0,dest,user, src1,dest,user, src2,dest,user, TOKEN]
   const remaining = [];
   for (const s of src) remaining.push(w(s), w(dest), { pubkey: user.publicKey, isSigner: true, isWritable: false });
@@ -76,13 +76,14 @@ function routeIx(user, src, dest, minOut) {
     programId: ROUTER,
     keys: [
       { pubkey: user.publicKey, isSigner: true, isWritable: false }, // authority
+      w(src[0]), // input_token_account (one input source; spent=100 <= amount_in)
       w(dest), // output_token_account
       ro(TOKEN), // token_program
       w(dest), // protocol_fee_account (unused: 300 * 20bps floors to 0)
       w(dest), // integrator_fee_account (unused: bps 0)
       ...remaining,
     ],
-    data: routeData(300, minOut, legs),
+    data: routeData(mint, 300, minOut, legs),
   };
 }
 
@@ -95,8 +96,8 @@ function sendV0(svm, user, ix) {
 
 // 1) happy path: 3 venue legs, one v0 tx, require 300 out.
 {
-  const { svm, user, src, dest } = setup();
-  const res = sendV0(svm, user, routeIx(user, src, dest, 300));
+  const { svm, user, src, dest, mint } = setup();
+  const res = sendV0(svm, user, routeIx(user, src, dest, 300, mint));
   assert.ok(!res.constructor?.name?.includes("Failed"), "3-venue v0 route should succeed");
   const got = readAmount(svm.getAccount(dest).data);
   assert.strictEqual(got, 300n, "dest received all three legs (3x100)");
@@ -105,8 +106,8 @@ function sendV0(svm, user, ix) {
 
 // 2) slippage: require 301 across the same three legs -> revert.
 {
-  const { svm, user, src, dest } = setup();
-  const res = sendV0(svm, user, routeIx(user, src, dest, 301));
+  const { svm, user, src, dest, mint } = setup();
+  const res = sendV0(svm, user, routeIx(user, src, dest, 301, mint));
   assert.ok(res.constructor?.name?.includes("Failed"), "should revert when aggregate min_out unmet");
   console.log("✅ aggregate slippage enforced across all three legs (min_out unmet -> atomic revert)");
 }

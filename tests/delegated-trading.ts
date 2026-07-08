@@ -90,11 +90,16 @@ describe("delegated-trading", () => {
     return pda;
   }
 
-  /** Encode the mock aggregator's `swap` instruction data. */
-  function routeData(amountIn: BN, minOut: BN): Buffer {
-    return mockRouter.coder.instruction.encode("swap", {
+  /** Encode `route(...)` data (mirrors aggregator_router) so execute_trade's
+   *  route_data binding (disc + input_mint + output_mint + amount_in) matches. */
+  function routeData(inMint: PublicKey, outMint: PublicKey, amountIn: BN): Buffer {
+    return mockRouter.coder.instruction.encode("route", {
+      inputMint: inMint,
+      outputMint: outMint,
       amountIn,
-      minAmountOut: minOut,
+      minAmountOut: new BN(0),
+      integratorFeeBps: 0,
+      legs: [],
     });
   }
 
@@ -114,13 +119,15 @@ describe("delegated-trading", () => {
       output?: PublicKey;
     }
   ) {
+    const inMint = params.input ?? inputMint;
+    const outMint = params.output ?? outputMint;
     return program.methods
       .executeTrade(
         params.amountIn,
-        params.input ?? inputMint,
-        params.output ?? outputMint,
+        inMint,
+        outMint,
         params.nonce,
-        routeData(params.amountIn, new BN(0))
+        routeData(inMint, outMint, params.amountIn)
       )
       .accounts({
         sessionSigner: sessionKey,

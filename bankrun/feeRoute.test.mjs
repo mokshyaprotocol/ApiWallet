@@ -33,13 +33,13 @@ function tokenAcct(mint, owner, amount) {
 const readAmt = (d) => Buffer.from(d).readBigUInt64LE(64);
 const transferData = (amt) => { const b = Buffer.alloc(9); b[0] = 3; b.writeBigUInt64LE(BigInt(amt), 1); return b; };
 
-function routeData(amountIn, minOut, integratorFeeBps, legAmt) {
+function routeData(inMint, outMint, amountIn, minOut, integratorFeeBps, legAmt) {
   const leg = Buffer.concat([Buffer.from([0]), u16(0), u16(3), (() => { const l = Buffer.alloc(4); l.writeUInt32LE(9); return l; })(), transferData(legAmt)]);
   const cnt = Buffer.alloc(4); cnt.writeUInt32LE(1);
-  return Buffer.concat([ROUTE_DISC, u64(amountIn), u64(minOut), u16(integratorFeeBps), cnt, leg]);
+  return Buffer.concat([ROUTE_DISC, inMint.toBuffer(), outMint.toBuffer(), u64(amountIn), u64(minOut), u16(integratorFeeBps), cnt, leg]);
 }
 
-function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN }) {
+function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN, amountIn = 10_000, routeInMint, legAmt = 10_000 }) {
   const svm = new LiteSVM();
   svm.addProgramFromFile(ROUTER, soPath);
   const user = new Keypair();
@@ -57,6 +57,7 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   const ro = (pk) => ({ pubkey: pk, isSigner: false, isWritable: false });
   const keys = [
     { pubkey: user.publicKey, isSigner: true, isWritable: false }, // authority
+    w(src),         // input_token_account (input spent from here)
     w(dest),        // output_token_account
     ro(tokenProgram), // token_program
     w(protoFee),    // protocol_fee_account
@@ -64,7 +65,8 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
     // remaining: leg [src, dest, authority] + token program
     w(src), w(dest), { pubkey: user.publicKey, isSigner: true, isWritable: false }, ro(TOKEN),
   ];
-  const ix = { programId: ROUTER, keys, data: routeData(10_000, minOut, integratorFeeBps, 10_000) };
+  const inMint = routeInMint ?? new PublicKey(mint);
+  const ix = { programId: ROUTER, keys, data: routeData(inMint, new PublicKey(mint), amountIn, minOut, integratorFeeBps, legAmt) };
   const msg = new TransactionMessage({ payerKey: user.publicKey, recentBlockhash: svm.latestBlockhash(), instructions: [ix] }).compileToV0Message();
   const tx = new VersionedTransaction(msg);
   tx.sign([user]);
@@ -110,4 +112,18 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenPro
   console.log("✅ 5. malicious token_program rejected (fee-transfer CPI target locked to SPL Token / output owner)");
 }
 
-console.log("\nFee model + token_program security fix validated.");
+// 6) M-1: declared input_mint must match the input account's real mint.
+{
+  const { res } = scenario({ integratorFeeBps: 0, minOut: 0, routeInMint: Keypair.generate().publicKey });
+  assert.ok(res.constructor?.name?.includes("Failed"), "should revert: input_mint mismatch");
+  console.log("✅ 6. input_mint bound to the input account's real mint (mismatch rejected)");
+}
+
+// 7) M-1: input actually spent must not exceed amount_in (per-trade cap).
+{
+  const { res } = scenario({ integratorFeeBps: 0, minOut: 0, amountIn: 9_999, legAmt: 10_000 });
+  assert.ok(res.constructor?.name?.includes("Failed"), "should revert: input spent > amount_in");
+  console.log("✅ 7. input spent capped at amount_in (over-cap swap rejected)");
+}
+
+console.log("\nFee model + M-1 (mint/amount binding) + token_program security fixes validated.");

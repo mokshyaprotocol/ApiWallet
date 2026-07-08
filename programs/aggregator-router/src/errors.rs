@@ -34,4 +34,10 @@ pub enum RouterError {
     FeeExceedsOutput,
     #[msg("token_program is not a valid SPL Token program owning the output account")]
     UnexpectedTokenProgram,
+    #[msg("input_token_account mint does not match the declared input_mint")]
+    InputMintMismatch,
+    #[msg("output_token_account mint does not match the declared output_mint")]
+    OutputMintMismatch,
+    #[msg("input spent exceeds amount_in")]
+    InputExceedsMax,
 }

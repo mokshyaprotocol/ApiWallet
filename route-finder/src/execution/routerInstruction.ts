@@ -1,10 +1,13 @@
 /**
- * Encode the on-chain `aggregator_router.route(amount_in, min_amount_out, legs)`
- * instruction from a RouterPlan, and assemble it as a web3.js instruction.
+ * Encode the on-chain `aggregator_router.route(input_mint, output_mint,
+ * amount_in, min_amount_out, integrator_fee_bps, legs)` instruction from a
+ * RouterPlan, and assemble it as a web3.js instruction.
  *
- * The route() account list is [authority, output_token_account, ...plan.accounts]
- * — the plan's `accountOffset` values index into the remaining accounts (the part
- * after the two named accounts), matching the program.
+ * The route() account list is
+ *   [authority, input_token_account, output_token_account, token_program,
+ *    protocol_fee_account, integrator_fee_account, ...plan.accounts]
+ * — the plan's `accountOffset` values index into the remaining accounts (the
+ * part after the six named accounts), matching the program.
  */
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { RouterPlan } from "./types.js";
@@ -18,11 +21,30 @@ function u64le(n: bigint): Buffer {
   return b;
 }
 
-/** Borsh-encode route() args: amount_in, min_amount_out, integrator_fee_bps, Vec<SwapLeg>. */
-export function encodeRouteData(plan: RouterPlan, integratorFeeBps = 0): Buffer {
+export interface RouteAccounts {
+  routerProgramId: PublicKey;
+  authority: PublicKey; // signer (user or session PDA)
+  inputTokenAccount: PublicKey; // input spent from here; mint + amount bound
+  outputTokenAccount: PublicKey; // slippage measured here
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  tokenProgram: PublicKey; // SPL Token program for fee transfers
+  protocolFeeAccount: PublicKey; // output-mint token account owned by our treasury
+  integratorFeeAccount: PublicKey; // integrator's output-mint token account
+}
+
+/** Borsh-encode route() args. */
+export function encodeRouteData(plan: RouterPlan, a: RouteAccounts, integratorFeeBps = 0): Buffer {
   const feeBps = Buffer.alloc(2);
   feeBps.writeUInt16LE(integratorFeeBps);
-  const head = Buffer.concat([Buffer.from(ROUTE_DISCRIMINATOR), u64le(plan.amountIn), u64le(plan.minAmountOut), feeBps]);
+  const head = Buffer.concat([
+    Buffer.from(ROUTE_DISCRIMINATOR),
+    a.inputMint.toBuffer(),
+    a.outputMint.toBuffer(),
+    u64le(plan.amountIn),
+    u64le(plan.minAmountOut),
+    feeBps,
+  ]);
   const legCount = Buffer.alloc(4);
   legCount.writeUInt32LE(plan.legs.length);
   const legs = plan.legs.map((leg) => {
@@ -35,15 +57,6 @@ export function encodeRouteData(plan: RouterPlan, integratorFeeBps = 0): Buffer 
   return Buffer.concat([head, legCount, ...legs]);
 }
 
-export interface RouteAccounts {
-  routerProgramId: PublicKey;
-  authority: PublicKey; // signer (user or session PDA)
-  outputTokenAccount: PublicKey; // slippage measured here
-  tokenProgram: PublicKey; // SPL Token program for fee transfers
-  protocolFeeAccount: PublicKey; // output-mint token account owned by our treasury
-  integratorFeeAccount: PublicKey; // integrator's output-mint token account
-}
-
 /** Build the route() TransactionInstruction from a plan. */
 export function buildRouteInstruction(
   plan: RouterPlan,
@@ -52,6 +65,7 @@ export function buildRouteInstruction(
 ): TransactionInstruction {
   const keys = [
     { pubkey: a.authority, isSigner: true, isWritable: false },
+    { pubkey: a.inputTokenAccount, isSigner: false, isWritable: true },
     { pubkey: a.outputTokenAccount, isSigner: false, isWritable: true },
     { pubkey: a.tokenProgram, isSigner: false, isWritable: false },
     { pubkey: a.protocolFeeAccount, isSigner: false, isWritable: true },
@@ -62,7 +76,7 @@ export function buildRouteInstruction(
       isWritable: m.isWritable,
     })),
   ];
-  return new TransactionInstruction({ programId: a.routerProgramId, keys, data: encodeRouteData(plan, integratorFeeBps) });
+  return new TransactionInstruction({ programId: a.routerProgramId, keys, data: encodeRouteData(plan, a, integratorFeeBps) });
 }
 
 /** Unique non-signer addresses in a plan — the candidates for an Address Lookup Table. */
@@ -74,6 +88,7 @@ export function lookupAddressesForPlan(plan: RouterPlan, a: RouteAccounts): Publ
     seen.add(pk);
     out.push(new PublicKey(pk));
   };
+  add(a.inputTokenAccount.toBase58(), false);
   add(a.outputTokenAccount.toBase58(), false);
   add(a.routerProgramId.toBase58(), false);
   add(a.tokenProgram.toBase58(), false);

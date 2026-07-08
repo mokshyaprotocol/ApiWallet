@@ -30,23 +30,33 @@ not have caught the drain.
 Regression test: `bankrun/feeRoute.test.mjs` case 5 (malicious `token_program`
 rejected) + the existing fee cases still pass.
 
-### M-1 — Session limits/allowlists are advisory relative to the opaque `route_data`  ⚠️ DOCUMENTED (remediation proposed)
-`execute_trade` checks `amount_in`, `input_mint`, and `output_mint` against the
-session's limits/allowlists — but the actual swap is carried in the **opaque
-`route_data`** forwarded to the router. A malicious session key could pass a
-small in-limit `amount_in` / allowlisted mints while `route_data` swaps a larger
-amount or different mints.
+### M-1 — Session limits/allowlists were advisory relative to the opaque `route_data`  ✅ FIXED (one documented residual)
+`execute_trade` checked `amount_in`/`input_mint`/`output_mint` against the
+session's limits, but the swap rode in the **opaque `route_data`** forwarded to
+the router, so a malicious session key could under-declare.
 
-Blast radius is bounded to **funds held by the session PDA** (the router lends
-only the session PDA's signature — see below), so the owner's main wallet is
-never at risk. But the *granular* per-trade/daily/mint limits are not
-cryptographically bound to the executed swap.
+**Fix** — bound the route to the declared values at both ends:
+- `execute_trade` now parses the forwarded route_data header
+  (`[disc][input_mint][output_mint][amount_in]…`) and rejects it unless the
+  discriminator is `route`, and the embedded `input_mint`/`output_mint`/`amount_in`
+  equal the session-checked (allowlisted/limited) values (`RouteDataMismatch`).
+- `route()` now takes `input_mint`/`output_mint` and an explicit
+  `input_token_account`, and enforces: `input_token_account.mint == input_mint`,
+  `output_token_account.mint == output_mint`, and **input actually spent ≤
+  `amount_in`** (measured as a balance delta) — so the declared mints and cap
+  bind the real swap.
 
-**Recommended remediation:** have `execute_trade` pass the expected
-`(input_mint, output_mint, max_amount_in)` into `route()`, and have `route()`
-verify the input/output token-account mints and measure the actual input spent /
-output received against them. (Architectural change to the
-`execute_trade → route` interface; not yet implemented.)
+Tests: `bankrun/feeRoute.test.mjs` cases 6 (mint mismatch rejected) and 7 (input
+over-cap rejected).
+
+**Residual (LOW):** the input-spent cap is measured on the *declared*
+`input_token_account`. A malicious caller could pass a decoy input account (of
+the same mint) and have the venue legs debit a *different* account, bypassing the
+per-trade amount cap. The output mint and net-out are still enforced, and all
+funds remain session-PDA-scoped, so this only softens the per-trade *amount* cap
+for a malicious session — it cannot exfiltrate to a foreign mint or the owner's
+wallet. Full closure requires the router to constrain leg debits to the declared
+input account (venue-specific; future work).
 
 ### Verified safe (no action)
 - **Signature scope** — `execute_trade` uses `invoke_signed` lending **only** the

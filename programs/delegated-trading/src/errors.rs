@@ -58,4 +58,7 @@ pub enum TradingError {
 
     #[msg("Missing a required account for the CPI")]
     MissingAccount,
+
+    #[msg("route_data does not match the approved input/output mint or amount")]
+    RouteDataMismatch,
 }

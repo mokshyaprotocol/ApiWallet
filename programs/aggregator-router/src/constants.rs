@@ -82,6 +82,8 @@ pub const PUMP_SWAP: Pubkey = pk("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
 /// SPL Token program (classic). Both classic and Token-2022 output accounts
 /// share the same `amount` layout at offset 64, which is all the router reads.
 pub const TOKEN_PROGRAM: Pubkey = pk("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+/// SPL Token-2022 program.
+pub const TOKEN_2022_PROGRAM: Pubkey = pk("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 // ---- Fee model (Jupiter/DFlow-style integrator fee + our protocol fee) ------
 

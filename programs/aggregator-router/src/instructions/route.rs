@@ -159,6 +159,16 @@ pub fn handler(
     let authority_ai = ctx.accounts.authority.to_account_info();
     let token_program_ai = ctx.accounts.token_program.to_account_info();
 
+    // SECURITY: the fee transfers CPI `token_program` with the authority's
+    // signature over the output account. `token_program` MUST be a real SPL
+    // Token program AND the program that owns the output account — otherwise a
+    // caller could pass a malicious program and have it drain the output under
+    // the authority's signature. (`output_ai.owner` is the token program that
+    // owns the account.)
+    let tp = token_program_ai.key();
+    require!(tp == TOKEN_PROGRAM || tp == TOKEN_2022_PROGRAM, RouterError::UnexpectedTokenProgram);
+    require!(tp == *output_ai.owner, RouterError::UnexpectedTokenProgram);
+
     if protocol_fee > 0 {
         let dest = ctx.accounts.protocol_fee_account.to_account_info();
         require!(
@@ -172,7 +182,12 @@ pub fn handler(
         transfer_token(&token_program_ai, &output_ai, &dest, &authority_ai, integrator_fee)?;
     }
 
-    let net_out = received - protocol_fee - integrator_fee;
+    // SECURITY (defense in depth): enforce min_amount_out on the ACTUAL output
+    // retained after fees — re-read the balance rather than trusting the
+    // computed net. This catches any case where a fee transfer moved more than
+    // intended, independent of the token_program checks above.
+    let final_after = read_token_amount(&output_ai)?;
+    let net_out = final_after.checked_sub(before).ok_or(RouterError::Overflow)?;
     require!(net_out >= min_amount_out, RouterError::SlippageExceeded);
 
     emit!(RouteExecuted {

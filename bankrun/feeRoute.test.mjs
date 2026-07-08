@@ -39,7 +39,7 @@ function routeData(amountIn, minOut, integratorFeeBps, legAmt) {
   return Buffer.concat([ROUTE_DISC, u64(amountIn), u64(minOut), u16(integratorFeeBps), cnt, leg]);
 }
 
-function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY }) {
+function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY, tokenProgram = TOKEN }) {
   const svm = new LiteSVM();
   svm.addProgramFromFile(ROUTER, soPath);
   const user = new Keypair();
@@ -58,7 +58,7 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY }) {
   const keys = [
     { pubkey: user.publicKey, isSigner: true, isWritable: false }, // authority
     w(dest),        // output_token_account
-    ro(TOKEN),      // token_program
+    ro(tokenProgram), // token_program
     w(protoFee),    // protocol_fee_account
     w(intFee),      // integrator_fee_account
     // remaining: leg [src, dest, authority] + token program
@@ -103,4 +103,11 @@ function scenario({ integratorFeeBps, minOut, protocolOwner = TREASURY }) {
   console.log("✅ 4. integrator fee capped (>255 bps rejected)");
 }
 
-console.log("\nFee model (protocol + integrator, Jupiter/DFlow-style) validated.");
+// 5) SECURITY: a malicious token_program is rejected (can't drain via fee CPI).
+{
+  const { res } = scenario({ integratorFeeBps: 50, minOut: 9_930, tokenProgram: Keypair.generate().publicKey });
+  assert.ok(res.constructor?.name?.includes("Failed"), "should revert: token_program not a real SPL Token program");
+  console.log("✅ 5. malicious token_program rejected (fee-transfer CPI target locked to SPL Token / output owner)");
+}
+
+console.log("\nFee model + token_program security fix validated.");

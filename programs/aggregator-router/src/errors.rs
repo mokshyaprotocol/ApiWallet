@@ -32,4 +32,6 @@ pub enum RouterError {
     BadProtocolFeeRecipient,
     #[msg("Fee exceeds the swap output")]
     FeeExceedsOutput,
+    #[msg("token_program is not a valid SPL Token program owning the output account")]
+    UnexpectedTokenProgram,
 }
